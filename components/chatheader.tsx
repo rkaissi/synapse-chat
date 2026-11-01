@@ -35,7 +35,8 @@ import {
 import { AutoIcon, SparkleIcon, ZapIcon } from "./icons";
 import { ModelKey, ModelProvider } from "@/lib/utils/model-provider";
 import { useMemo, useState } from "react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { dispatchNewChat } from "@/lib/utils/new-chat";
 
 export const modelInfo: Partial<
     Record<
@@ -170,6 +171,7 @@ const ChatHeader = ({
     onSidebarOpenChange
 }: Props) => {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
 
     const handleModelChange = (model: ModelKey) => {
         onModelSelect(model);
@@ -214,7 +216,10 @@ const ChatHeader = ({
                         variant="outline"
                         size="icon"
                         aria-label="Open new chat"
-                        onClick={() => redirect("/chat")} // or just redirect to "/"
+                        onClick={() => {
+                            router.push("/");
+                            dispatchNewChat();
+                        }}
                     >
                         <MessageSquarePlusIcon className="h-5 w-5" />
                     </Button>

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const { userId, chatId, chatName, messages, settings } = body;
+        const { userId, chatId, chatName, messages, settings, repo } = body;
 
         if (
             !userId ||
@@ -63,7 +63,8 @@ export async function POST(req: Request) {
         const chatUpdate = {
             userId,
             messages,
-            name: chatName
+            name: chatName,
+            repo: repo ?? null
         };
 
         const chatOptions = {

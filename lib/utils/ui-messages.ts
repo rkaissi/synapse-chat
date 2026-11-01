@@ -31,7 +31,8 @@ export const getToolInvocations = (message: UIMessage): ToolInvocation[] =>
                   : "call",
         toolCallId: part.toolCallId,
         toolName: getToolName(part),
-        args: part.input,
+        // Input is undefined until the tool input has finished streaming
+        args: part.input ?? {},
         result:
             part.state === "output-available"
                 ? part.output

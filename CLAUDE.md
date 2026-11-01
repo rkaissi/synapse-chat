@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Synapse Chat — a Next.js 15 (App Router, React 19) AI chatbot with Claude-style artifacts, tool use (Bing, Wikipedia, weather, DALL·E, etc.), a multi-agent mode, and per-user memory. Built on the Vercel AI SDK v7 (`ai`, `@ai-sdk/react`, `@ai-sdk/*` providers) with MongoDB (Mongoose 9) for persistence. Styling is Tailwind CSS 4 (`app/globals.css` imports `tailwind.config.mts` via `@config`).
 
+## Working agreements
+
+- Fix bugs you run into while testing, and record each change and bug fix in `docs/CHANGELOG.md` (newest first). Planned work lives in `docs/ROADMAP.md`.
+- Keep model test calls minimal (the OpenAI/Anthropic keys are paid): one prompt on a cheap model (GPT-6 Luna, Claude Haiku) is usually enough.
+
 ## Commands
 
 ```bash
@@ -60,8 +65,11 @@ When `enableMemory` is on, `findRelevantMemories` embeds the last user message (
 ### History limiting
 `lib/utils/message-manager.ts` keeps the last `messageLimit` UI messages and summarizes older ones with a Groq model (`gptoss20b`) before conversion to model messages.
 
+### GitHub repositories (`lib/github/`)
+`/api/github` parses the URL and downloads one commit as a tarball into an in-memory cache (`repo.ts`). The client stores the returned `RepoConnection`, sends it as `repo` in each chat request and saves it on the chat document. The chat route then adds `repo_list_files` / `repo_read_file` / `repo_search` (`tools.ts`) and a short overview to the system prompt, pinned to the connected commit.
+
 ### Data
-Mongoose models in `models/` (`chat`, `user`, `artifact`). `lib/db/index.ts` provides a cached `dbConnect()`; call it in API routes before querying.
+Mongoose models in `models/` (`chat`, `user`, `artifact`). `lib/db/index.ts` provides a cached `dbConnect()`; call it in API routes before querying. Models are cached across hot reloads, so restart the dev server after schema changes.
 
 ### Markdown rendering
 Messages are rendered with Showdown plus custom extensions in `lib/showdown-extensions/` (code highlighting, KaTeX, footnotes, images, links, unclosed code blocks during streaming), sanitized with DOMPurify. Mermaid diagrams render via `components/mermaid.tsx`.

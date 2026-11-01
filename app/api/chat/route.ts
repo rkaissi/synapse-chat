@@ -24,10 +24,18 @@ import {
     maxSteps,
     toolsPrompt
 } from "./config";
-import { ChatMetadata, ChatUIMessage, Settings, ToolChoice } from "@/lib/types";
+import {
+    ChatMetadata,
+    ChatUIMessage,
+    RepoConnection,
+    Settings,
+    ToolChoice
+} from "@/lib/types";
 import { limitMessages } from "@/lib/utils/message-manager";
 import { getMessageText, inlineTextFileParts } from "@/lib/utils/ui-messages";
 import { findRelevantMemories, extractMemory } from "@/lib/memory";
+import { describeRepo, getRepoSnapshot } from "@/lib/github/repo";
+import { createRepoTools } from "@/lib/github/tools";
 
 export const maxDuration = 100; // Timeout in seconds
 
@@ -89,9 +97,14 @@ export async function POST(req: Request) {
     const {
         userId,
         messages,
-        settings
-    }: { userId: string; messages: ChatUIMessage[]; settings: Settings } =
-        await req.json();
+        settings,
+        repo
+    }: {
+        userId: string;
+        messages: ChatUIMessage[];
+        settings: Settings;
+        repo?: RepoConnection | null;
+    } = await req.json();
 
     const {
         model,
@@ -147,6 +160,28 @@ export async function POST(req: Request) {
         extractMemory(lastUserMessage, userId);
     }
 
+    // A connected repository is explored through tools, pinned to the connected commit
+    let repoTools = {};
+    let repoPrompt = "";
+    if (repo) {
+        try {
+            const snapshot = await getRepoSnapshot(repo.owner, repo.repo, repo.sha);
+            if (finalToolChoice !== "none") {
+                repoTools = createRepoTools(snapshot);
+                repoPrompt = describeRepo(snapshot);
+            } else {
+                repoPrompt = `
+The user connected the GitHub repository ${repo.owner}/${repo.repo}, but tools are disabled, so its files cannot be read in this conversation.
+`;
+            }
+        } catch (error) {
+            console.error("Failed to load connected repository:", error);
+            repoPrompt = `
+The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it could not be loaded (${error instanceof Error ? error.message : "unknown error"}). Tell the user if they ask about it.
+`;
+        }
+    }
+
     const isThinkingModel = isReasoningModel(modelToUse);
 
     const baseModel = getModel(models[modelToUse]);
@@ -167,7 +202,7 @@ export async function POST(req: Request) {
         maxOutputTokens: finalMaxTokens,
         instructions: {
             role: "system",
-            content: system,
+            content: system + repoPrompt,
             providerOptions: {
                 anthropic: { cacheControl: { type: "ephemeral" } }
             }
@@ -176,7 +211,7 @@ export async function POST(req: Request) {
             await inlineTextFileParts(limitedMessages),
             { ignoreIncompleteToolCalls: true }
         ),
-        tools: toolsToUse,
+        tools: { ...toolsToUse, ...repoTools },
         toolChoice: finalToolChoice,
         stopWhen: isStepCount(maxSteps),
         experimental_transform: smoothStream()

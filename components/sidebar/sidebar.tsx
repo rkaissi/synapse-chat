@@ -2,7 +2,7 @@ import React, { useRef } from "react";
 import { memo, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageSquare } from "lucide-react";
-import { usePathname, redirect } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { SidebarSkeleton } from "./sidebarskeleton";
@@ -24,6 +24,7 @@ const SCROLL_THRESHOLD = 100;
 
 export const Sidebar = memo(function Sidebar({ userId }: Props) {
     const pathname = usePathname();
+    const router = useRouter();
     const [chats, setChats] = useState<Chat[]>([]);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -231,7 +232,7 @@ export const Sidebar = memo(function Sidebar({ userId }: Props) {
                                         transform: `translateY(${virtualRow.start}px)`
                                     }}
                                     onClick={() =>
-                                        redirect(`/chat/${chat._id}`)
+                                        router.push(`/chat/${chat._id}`)
                                     }
                                 >
                                     <div className="flex items-start w-full">

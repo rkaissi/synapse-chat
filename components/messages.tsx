@@ -202,15 +202,18 @@ export const AssistantMessage = ({
         );
     }, [message, onArtifactClick]);
 
-    const formatToolArgs = (args: Record<string, any>): string => {
-        return Object.entries(args)
+    // args is empty while the tool input is still streaming
+    const formatToolArgs = (args?: Record<string, any>): string => {
+        return Object.entries(args ?? {})
             .map(([key, value]) => {
                 const formattedKey = key.replace(/([A-Z])/g, " $1").trim();
                 const capitalizedKey =
                     formattedKey.charAt(0).toUpperCase() +
                     formattedKey.slice(1);
                 const formattedValue =
-                    typeof value === "string" ? value : JSON.stringify(value);
+                    typeof value === "string"
+                        ? value
+                        : (JSON.stringify(value) ?? "");
                 return `${capitalizedKey}: ${formattedValue.substring(0, 500)}`;
             })
             .join("\n");

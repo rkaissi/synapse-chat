@@ -44,6 +44,18 @@ export interface Attachment {
     url: string;
 }
 
+// A GitHub repository connected to a chat (see lib/github/repo.ts)
+export interface RepoConnection {
+    owner: string;
+    repo: string;
+    // Branch/tag the user asked for, and the commit it resolved to
+    ref: string;
+    sha: string;
+    defaultBranch: string;
+    isPrivate: boolean;
+    fileCount: number;
+}
+
 // Per-message metadata streamed from /api/chat
 export type ChatMetadata = Omit<Data, "chatId" | "reasoning">;
 

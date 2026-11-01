@@ -1,4 +1,4 @@
-import { CombinedMessage, Settings } from "@/lib/types";
+import { CombinedMessage, RepoConnection, Settings } from "@/lib/types";
 import toast from "react-hot-toast";
 
 const saveChat = async (
@@ -7,6 +7,7 @@ const saveChat = async (
     chatName: string,
     messages: CombinedMessage[],
     settings: Settings,
+    repo: RepoConnection | null = null,
     setIsSaving?: (value: boolean) => void
 ) => {
     if (setIsSaving) {
@@ -24,7 +25,8 @@ const saveChat = async (
                 chatId,
                 chatName,
                 messages,
-                settings
+                settings,
+                repo
             })
         });
 
