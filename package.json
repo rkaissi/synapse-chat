@@ -68,10 +68,17 @@
     "@types/react-dom": "^19.3.0",
     "@types/showdown": "^2.0.6",
     "@types/xml2js": "^0.4.14",
-    "eslint": "^10.14.0",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.3",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "react-runner": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    },
+    "postcss-selector-parser": "^6.1.5"
   }
 }

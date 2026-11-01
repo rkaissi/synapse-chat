@@ -2,6 +2,14 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Clean `npm install`
+
+- **ESLint 10 → 9.** `eslint-config-next` 16 depends on plugins (react, import, jsx-a11y) that only support ESLint up to 9, so installs printed peer-dependency conflicts. ESLint 9 is now pinned.
+- **`react-runner` peer warning.** Its last release declares React ≤ 18 but works with React 19 (verified with React artifacts). An npm `overrides` entry makes it use the project's React.
+- **Security advisories: 25 → 19, no high-severity ones left.** Patched versions of minimatch, glob, picomatch, brace-expansion, underscore, uuid and @xmldom/xmldom were applied, and `postcss-selector-parser` is overridden to 6.1.x.
+  - The remaining moderates are in dev-only ESLint/sucrase tooling (fixes need majors those tools don't support yet) and `showdown`, which has no patched release (its output is sanitized with DOMPurify).
+  - Don't run `npm audit fix --force`: its suggestions are downgrades (ESLint 4, `eslint-config-next` 12) that break the project.
+
 ## 2026-11-01 — Chat loading fixes and GitHub repo connection
 
 ### GitHub repository connection (reworked)
@@ -49,7 +57,7 @@ Bugs fixed in the old implementation:
 ## 2026-11-01 — Dependency upgrade and AI SDK 7 migration
 
 - AI SDK 4 → 7: UI message streams, `useChat` with `DefaultChatTransport`, system prompt via `instructions`, `generateText` + `Output.object` instead of `generateObject`, usage and finish reason as message metadata. Saved chats keep their format; `lib/utils/ui-messages.ts` converts between the two, so no data migration is needed.
-- Next 15 → 16, React 19.3, Tailwind 3 → 4 (`tw-animate-css` replaces `tailwindcss-animate`), zod 4, Mongoose 9, ESLint 10 with a flat config (`next lint` was removed), TypeScript 6.0 (TypeScript 7 lacks the compiler API that Next and typescript-eslint need), recharts 3, lucide-react 1.x, openai 7.
+- Next 15 → 16, React 19.3, Tailwind 3 → 4 (`tw-animate-css` replaces `tailwindcss-animate`), zod 4, Mongoose 9, ESLint with a flat config (`next lint` was removed), TypeScript 6.0 (TypeScript 7 lacks the compiler API that Next and typescript-eslint need), recharts 3, lucide-react 1.x, openai 7.
 - `@agentic/*` tools were replaced by `fetch`-based weather, Wikipedia and Bing tools with the same names and result shapes (`@agentic` does not support AI SDK 5+).
 - Fixed the new React Compiler lint errors.
 
