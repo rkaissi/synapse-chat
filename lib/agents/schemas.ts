@@ -42,7 +42,8 @@ When creating the taskList, keep the following guidelines in mind:
 
 export const supervisorSchema = z.object({
     summary: z.string(),
-    updatedContext: z.record(z.string(), z.any()).optional(), // Update this
+    // Free-form object (z.record emits propertyNames, which OpenAI ignores)
+    updatedContext: z.object({}).catchall(z.any()).optional(),
     needsRevision: z
         .boolean()
         .describe(

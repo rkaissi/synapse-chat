@@ -75,7 +75,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const programmerAgent = agentBuilder.build({
         name: "Programmer",
         role: "You are a senior software engineer.",
-        model: models.claudeopus55,
+        model: models.gpt61sol,
         temperature: 0.5,
         maxTokens: 4096,
         schema: programmerSchema
@@ -93,7 +93,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const writerAgent = agentBuilder.build({
         name: "Writer",
         role: "You are an expert writer. Think step by step.",
-        model: models.claudeopus55,
+        model: models.gpt61terra,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema

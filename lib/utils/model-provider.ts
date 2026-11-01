@@ -10,7 +10,7 @@ import {
 } from "ai";
 
 export const embeddingModel = openai.embedding("text-embedding-3-small");
-export const imageModel = openai.image("dall-e-3");
+export const imageModel = openai.image("gpt-image-2.5-flare");
 
 export const thinkingMiddleware: LanguageModelMiddleware = {
     transformParams: async ({ params }) => {

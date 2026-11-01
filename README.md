@@ -37,7 +37,7 @@ Make sure to replace any placeholders in the `.env.example` file with your actua
 - **Vision**: Supports image recognition and processing.
 - **File Upload**: Allows users to upload files for processing.
 - **Interactive Web Applications**: Generates interactive web applications using AI within the chat window.
-- **Image Search and Generation**: Searches for and generates images using DALLE-3.
+- **Image Search and Generation**: Searches for images and generates them with OpenAI GPT Image.
 - **Interactive Charts**: Creates interactive charts using Mermaid.
 - **Slideshow Generation**: Compiles research and images into slideshows.
 - **Real-time Information**: Provides up-to-date time and weather information.
@@ -78,7 +78,7 @@ Make sure to replace any placeholders in the `.env.example` file with your actua
 
 ![Screenshot 2024-11-02 195337](https://github.com/user-attachments/assets/0c70f3ed-6850-4103-a486-a2ffee360e91)
 
-### Generate Images using DALLE-3 Integration
+### Generate Images with OpenAI GPT Image
 
 ![image](https://github.com/user-attachments/assets/0d318657-bc85-43ef-b108-e82b16aa7667)
 

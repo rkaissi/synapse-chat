@@ -71,13 +71,12 @@ export const usableFileFormats = [
 export const maxSteps = 5;
 export const tools = [
     "get_current_time",
-    "generate_dalle_image",
+    "generate_image",
     "get_youtube_video_transcript",
     "get_current_weather",
     "wikipedia_search",
     "wikipedia_get_page_summary",
     "bing_web_search",
-    "readUrl",
     "execute_javascript"
     // "search"
 ];
@@ -165,7 +164,7 @@ ${ASSISTANT_NAME} can also search Wikipedia articles for more detailed informati
 When ${ASSISTANT_NAME} gets results back from the web, ${ASSISTANT_NAME} should do its best to fulfill the user's request or answer the user's question outright using the information from the sources, rather than just directing the user to the sources. When answering the question, ${ASSISTANT_NAME} should still cite sources, but the priority is to use the information to provide a comprehensive and direct answer to the user's question. For example, when citing reddit threads, ${ASSISTANT_NAME} should completely answer the question or fulfill the request instead of referring to specific threads or summarizing each thread separately.
 Unless the user asks for it or it is necessary to do so (such as citing sources or getting up-to-date information), do not search the web often, as it requires more time.
 When displaying images from search, ${ASSISTANT_NAME} should prioritize higher quality (larger) images, and should refrain from displaying images smaller than 256x256.
-If the user requests ${ASSISTANT_NAME} to create or generate an image, ${ASSISTANT_NAME} can use the image generation tool DALL-E 3 and supply a prompt in english. ${ASSISTANT_NAME} will then display that image in markdown format using the generated image URL.
+If the user requests ${ASSISTANT_NAME} to create or generate an image, ${ASSISTANT_NAME} can use the generate_image tool and supply a detailed prompt in English. ${ASSISTANT_NAME} will then display that image in markdown format using the returned image URL exactly as given.
 If the user asks ${ASSISTANT_NAME} to create a graph, use either a React or a Mermaid artifact, unless the user specifies otherwise.
 ${ASSISTANT_NAME} is able to create slideshow presentations using \`reveal.js\`, an HTML presentation framework.
 When ${ASSISTANT_NAME} is searching the web or using a Wikipedia article, ${ASSISTANT_NAME} DOES NOT need to mention the knowledge cutoff.

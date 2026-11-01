@@ -1,17 +1,21 @@
-import { tool } from "ai";
+import { generateId, generateImage, tool } from "ai";
 import { z } from "zod";
-import OpenAI from "openai";
 
 import { YoutubeTranscript } from "youtube-transcript";
 import { formatTime } from "@/lib/utils/format";
 import { createAgentNetwork } from "@/lib/agents";
 import executeJavaScript from "@/lib/tools/eval";
+import { imageModel } from "@/lib/utils/model-provider";
+import dbConnect from "@/lib/db";
+import GeneratedImage from "@/models/image";
 import { artifactExtractionMiddleware } from "./artifact-middleware";
 
-const openai = new OpenAI();
 
-const WIKIPEDIA_USER_AGENT =
-    "SynapseChat (https://github.com/GameGenesis/ai-chat-artifacts)";
+// Wikimedia rate-limits requests without a descriptive User-Agent
+const WIKIPEDIA_HEADERS = {
+    "User-Agent": "SynapseChat/1.0 (https://github.com/rkaissi/synapse-chat)",
+    "Api-User-Agent": "SynapseChat/1.0 (https://github.com/rkaissi/synapse-chat)"
+};
 
 const fetchJson = async (url: string | URL, init?: RequestInit) => {
     const response = await fetch(url, init);
@@ -83,38 +87,45 @@ export const tools = {
             })
         })
     }),
-    generate_dalle_image: tool({
-        description: "Generate an image (using DALLE)",
+    generate_image: tool({
+        description:
+            "Generate an image from a text prompt (GPT Image). Returns a URL to show the image in markdown.",
         inputSchema: z.object({
             prompt: z
                 .string()
-                .describe("The prompt used to generate the image"),
+                .describe("A detailed description of the image, in English"),
             size: z
-                .enum([
-                    "1024x1024",
-                    "256x256",
-                    "512x512",
-                    "1792x1024",
-                    "1024x1792"
-                ])
-                .describe("The size of the image")
-                .default("1024x1024")
+                .enum(["1024x1024", "1536x1024", "1024x1536", "auto"])
+                .describe("Square, landscape or portrait")
+                .default("1024x1024"),
+            quality: z
+                .enum(["low", "medium", "high"])
+                .describe("Higher quality is slower and costs more")
+                .default("medium")
         }),
-        execute: async ({ prompt, size }) => {
-            const response = await openai.images.generate({
-                model: "dall-e-3",
+        execute: async ({ prompt, size, quality }) => {
+            const { image } = await generateImage({
+                model: imageModel,
                 prompt,
-                n: 1,
-                size
+                ...(size === "auto" ? {} : { size }),
+                providerOptions: {
+                    openai: { quality, outputFormat: "webp", outputCompression: 80 }
+                }
             });
-            
-            if (!response.data || response.data.length === 0) {
-                throw new Error("No image generated");
-            }
-            
-            return {
-                url: response.data[0].url
-            };
+
+            // Image models return raw data; store it and hand the model a short URL
+            // (embedding base64 would bloat the chat history and saved chats)
+            await dbConnect();
+            const id = generateId();
+            await GeneratedImage.create({
+                _id: id,
+                data: Buffer.from(image.uint8Array),
+                mediaType: image.mediaType,
+                prompt,
+                model: imageModel.modelId
+            });
+
+            return { url: `/api/images/${id}`, prompt };
         }
     }),
     get_youtube_video_transcript: tool({
@@ -133,7 +144,8 @@ export const tools = {
                 transcript: data
                     .map(
                         (line) =>
-                            `[${formatTime(Math.floor(line.offset))}] ${
+                            // Offsets are in milliseconds
+                            `[${formatTime(Math.floor(line.offset / 1000))}] ${
                                 line.text
                             }`
                     )
@@ -236,7 +248,7 @@ export const tools = {
             );
             url.searchParams.set("q", query);
             return fetchJson(url, {
-                headers: { "api-user-agent": WIKIPEDIA_USER_AGENT }
+                headers: WIKIPEDIA_HEADERS
             });
         }
     }),
@@ -257,7 +269,7 @@ export const tools = {
                 {
                     headers: {
                         "accept-language": acceptLanguage,
-                        "api-user-agent": WIKIPEDIA_USER_AGENT
+                        ...WIKIPEDIA_HEADERS
                     }
                 }
             );
