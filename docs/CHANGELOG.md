@@ -2,6 +2,12 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Database connection and warnings
+
+- **A failed MongoDB connection was cached forever.** `dbConnect` swallowed the error and cached the failed attempt, so the app never retried. Every query then waited 10 seconds and failed with "buffering timed out" (for example, when the dev server started while a paused Atlas cluster was still waking up). It now logs the real error and retries on the next request.
+- Replaced Mongoose's deprecated `new: true` option with `returnDocument: "after"`.
+- Reasoning models no longer receive `topP` (they ignore it and the AI SDK logged a warning on every request), matching how `temperature` is handled.
+
 ## 2026-11-01 — Clean `npm install`
 
 - **ESLint 10 → 9.** `eslint-config-next` 16 depends on plugins (react, import, jsx-a11y) that only support ESLint up to 9, so installs printed peer-dependency conflicts. ESLint 9 is now pinned.

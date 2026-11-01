@@ -145,7 +145,7 @@ const createMemory = async (userId: string, content: string) => {
         const updatedUser = await User.findByIdAndUpdate(
             userId,
             { $push: { memories: embeddedMemory[0] } },
-            { new: true }
+            { returnDocument: "after" }
         );
 
         if (!updatedUser) {
@@ -179,7 +179,7 @@ const updateMemory = async (
                     "memories.$.embedding": newEmbedding
                 }
             },
-            { new: true }
+            { returnDocument: "after" }
         );
 
         if (!updatedUser) {
@@ -202,7 +202,7 @@ const deleteMemory = async (userId: string, memoryId: string) => {
         const updatedUser = await User.findByIdAndUpdate(
             userId,
             { $pull: { memories: { _id: memoryId } } },
-            { new: true }
+            { returnDocument: "after" }
         );
 
         if (!updatedUser) {

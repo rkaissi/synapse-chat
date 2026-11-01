@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
         const userOptions = {
             upsert: true,
-            new: true,
+            returnDocument: "after" as const,
             setDefaultsOnInsert: true
         };
 
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
         const chatOptions = {
             upsert: true,
-            new: true,
+            returnDocument: "after" as const,
             setDefaultsOnInsert: true
         };
 

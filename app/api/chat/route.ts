@@ -196,9 +196,9 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
                   middleware: artifactExtractionMiddleware
               })
             : baseModel,
-        // Reasoning models only support the default temperature
+        // Reasoning models only support the default sampling settings
         temperature: isThinkingModel ? undefined : finalTemperature,
-        topP: finalTopP,
+        topP: isThinkingModel ? undefined : finalTopP,
         maxOutputTokens: finalMaxTokens,
         instructions: {
             role: "system",
