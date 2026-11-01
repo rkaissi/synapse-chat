@@ -25,7 +25,7 @@ const WikipediaSummaryCard: React.FC<WikipediaSummaryCardProps> = ({
         <Card className="w-full">
             <CardContent className="p-4">
                 <div className="flex items-start space-x-4">
-                    <div className="relative h-16 w-16 flex-shrink-0 mt-1">
+                    <div className="relative h-16 w-16 shrink-0 mt-1">
                         <Image
                             className="rounded-lg object-cover h-16"
                             src={
@@ -38,7 +38,7 @@ const WikipediaSummaryCard: React.FC<WikipediaSummaryCardProps> = ({
                             style={{ maxHeight: "64px", maxWidth: "64px" }}
                         />
                     </div>
-                    <div className="flex-grow">
+                    <div className="grow">
                         <h3 className="text-lg font-semibold mb-2">
                             {summary.title}
                         </h3>

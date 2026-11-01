@@ -2,10 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import OpenAI from "openai";
 
-import { createAISDKTools } from "@agentic/ai-sdk";
-import { BingClient } from "@agentic/bing";
-import { WeatherClient } from "@agentic/weather";
-import { WikipediaClient } from "@agentic/wikipedia";
 import { YoutubeTranscript } from "youtube-transcript";
 import { formatTime } from "@/lib/utils/format";
 import { createAgentNetwork } from "@/lib/agents";
@@ -14,12 +10,18 @@ import { artifactExtractionMiddleware } from "./artifact-middleware";
 
 const openai = new OpenAI();
 
-const weather = new WeatherClient();
-const bing = new BingClient();
-const wikipedia = new WikipediaClient();
-// const jina = new JinaClient();
-// const searxng = new SearxngClient();
-// const wolframAlpha = new WolframAlphaClient();
+const WIKIPEDIA_USER_AGENT =
+    "SynapseChat (https://github.com/GameGenesis/ai-chat-artifacts)";
+
+const fetchJson = async (url: string | URL, init?: RequestInit) => {
+    const response = await fetch(url, init);
+    if (!response.ok) {
+        throw new Error(
+            `Request to ${new URL(url).host} failed with status ${response.status}`
+        );
+    }
+    return response.json();
+};
 
 const agentNetwork = createAgentNetwork();
 
@@ -27,7 +29,7 @@ export const createAgentsTool = (previousAssistantMessage: string) =>
     tool({
         description:
             "Call upon agents to perform a specific task. Once you receive their response, double-check and verify it for any issues or missing information. If any arise, add a note amending them. Output a formatted final response to the user.",
-        parameters: z.object({
+        inputSchema: z.object({
             project: z
                 .string()
                 .describe(
@@ -64,7 +66,7 @@ export const createAgentsTool = (previousAssistantMessage: string) =>
 export const tools = {
     get_current_time: tool({
         description: "Get the current time",
-        parameters: z.object({
+        inputSchema: z.object({
             timeZone: z
                 .string()
                 .describe(
@@ -83,7 +85,7 @@ export const tools = {
     }),
     generate_dalle_image: tool({
         description: "Generate an image (using DALLE)",
-        parameters: z.object({
+        inputSchema: z.object({
             prompt: z
                 .string()
                 .describe("The prompt used to generate the image"),
@@ -118,7 +120,7 @@ export const tools = {
     get_youtube_video_transcript: tool({
         description:
             "Retrieve the complete transcript of a YouTube video using its video ID",
-        parameters: z.object({
+        inputSchema: z.object({
             videoId: z
                 .string()
                 .describe(
@@ -143,7 +145,7 @@ export const tools = {
     execute_javascript: tool({
         description:
             "Executes JavaScript code in the browser and returns any results. This tool is useful for evaluating mathematical expressions, running small code snippets, or performing simple calculations. Note that console logs do nothing in this environment.",
-        parameters: z.object({
+        inputSchema: z.object({
             javascript: z.string().describe("The JavaScript code to execute.")
         }),
         execute: async ({ javascript }) => ({
@@ -205,12 +207,80 @@ export const tools = {
     //     }
     // }),
     // web_search_preview: openai.tools.webSearchPreview(),
-    ...createAISDKTools(
-        weather,
-        wikipedia,
-        bing,
-        // jina.functions.pick("readUrl")
-    )
+    // The following tools previously came from @agentic/*, which does not support AI SDK 5+.
+    // Names and result shapes are kept so the tool cards and saved chats keep working.
+    get_current_weather: tool({
+        description: "Gets info about the current weather at a given location.",
+        inputSchema: z.object({
+            q: z
+                .string()
+                .describe(
+                    'Location to get the weather for. Can be a city name, zipcode, IP address, or lat/lng coordinates. Example: "London"'
+                )
+        }),
+        execute: async ({ q }) => {
+            const url = new URL("https://api.weatherapi.com/v1/current.json");
+            url.searchParams.set("key", process.env.WEATHER_API_KEY ?? "");
+            url.searchParams.set("q", q);
+            return fetchJson(url);
+        }
+    }),
+    wikipedia_search: tool({
+        description: "Searches Wikipedia for pages matching the given query.",
+        inputSchema: z.object({
+            query: z.string().describe("Search query")
+        }),
+        execute: async ({ query }) => {
+            const url = new URL(
+                "https://en.wikipedia.org/w/rest.php/v1/search/page"
+            );
+            url.searchParams.set("q", query);
+            return fetchJson(url, {
+                headers: { "api-user-agent": WIKIPEDIA_USER_AGENT }
+            });
+        }
+    }),
+    wikipedia_get_page_summary: tool({
+        description: "Gets a summary of the given Wikipedia page.",
+        inputSchema: z.object({
+            title: z.string().describe("Wikipedia page title"),
+            acceptLanguage: z
+                .string()
+                .optional()
+                .default("en-us")
+                .describe("Locale code for the language to use.")
+        }),
+        execute: async ({ title, acceptLanguage }) => {
+            const page = encodeURIComponent(title.trim().replaceAll(" ", "_"));
+            return fetchJson(
+                `https://en.wikipedia.org/api/rest_v1/page/summary/${page}?redirect=true`,
+                {
+                    headers: {
+                        "accept-language": acceptLanguage,
+                        "api-user-agent": WIKIPEDIA_USER_AGENT
+                    }
+                }
+            );
+        }
+    }),
+    bing_web_search: tool({
+        description:
+            "Searches the web using the Bing search engine to return the most relevant web pages for a given query. Can also be used to find up-to-date news and information about many topics.",
+        inputSchema: z.object({
+            q: z.string().describe("search query")
+        }),
+        execute: async ({ q }) => {
+            const url = new URL("https://api.bing.microsoft.com/v7.0/search");
+            url.searchParams.set("q", q);
+            url.searchParams.set("mkt", "en-US");
+            const { rankingResponse, ...result } = await fetchJson(url, {
+                headers: {
+                    "Ocp-Apim-Subscription-Key": process.env.BING_API_KEY ?? ""
+                }
+            });
+            return result;
+        }
+    })
 };
 
 // Export the artifact extraction middleware

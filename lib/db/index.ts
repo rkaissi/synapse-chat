@@ -3,10 +3,6 @@ import mongoose from "mongoose";
 const MONGODB_URI =
     process.env.MONGODB_URI || "mongodb://localhost:27017/ChatbotDB";
 
-if (!MONGODB_URI) {
-    throw new Error("Please define the MONGODB_URI environment variable");
-}
-
 declare global {
     var mongoose: any;
 }
@@ -24,15 +20,24 @@ const dbConnect = async () => {
 
     if (!cached.promise) {
         cached.promise = mongoose
-            .connect(MONGODB_URI)
+            .connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
             .then((mongoose) => {
-                console.log('Connected to MongoDB');
+                console.log("Connected to MongoDB");
                 return mongoose;
-            })
-            .catch(() => console.warn("Could not connect to MongoDB"));
+            });
     }
-    console.log('Connected to MongoDB (Cached)');
-    cached.conn = await cached.promise;
+
+    try {
+        cached.conn = await cached.promise;
+    } catch (error) {
+        // Don't cache the failure: the next request retries the connection
+        cached.promise = null;
+        console.error(
+            "Could not connect to MongoDB:",
+            error instanceof Error ? error.message : error
+        );
+        throw error;
+    }
     return cached.conn;
 };
 

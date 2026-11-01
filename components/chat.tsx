@@ -10,7 +10,15 @@ import React, {
 } from "react";
 import { Messages } from "./messages";
 import { useChat } from "@ai-sdk/react";
-import { Action, Artifact, CombinedMessage, Data, Settings } from "@/lib/types";
+import {
+    Action,
+    Artifact,
+    ChatUIMessage,
+    CombinedMessage,
+    NewMessage,
+    RepoConnection,
+    Settings
+} from "@/lib/types";
 import { ModelKey } from "@/lib/utils/model-provider";
 import ChatHeader from "./chatheader";
 import ChatFooter from "./chatfooter";
@@ -27,8 +35,7 @@ import {
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOOL_CHOICE,
-    DEFAULT_TOPP,
-    maxSteps
+    DEFAULT_TOPP
 } from "@/app/api/chat/config";
 import ContinueButton from "./continuebutton";
 import dynamic from "next/dynamic";
@@ -36,13 +43,22 @@ import DefaultPromptsSkeleton from "./defaultpromptsskeleton";
 import { ArtifactsWindow } from "./artifactswindow";
 import saveChat from "@/lib/utils/save-chat";
 import markdownToHtml from "@/lib/utils/markdown-to-html";
-import { generateId, Message } from "ai";
+import { DefaultChatTransport } from "ai";
 import { usePathname } from "next/navigation";
 import { SidebarContainer } from "./sidebar";
 import GitHubRepoSelector from "./githubreposelector";
 import toast from "react-hot-toast";
 import { ChatErrorMessage } from "./chaterrormessage";
 import { extractArtifacts } from "@/app/api/chat/artifact-middleware";
+import {
+    getAttachments,
+    getMessageReasoning,
+    getMessageText,
+    getToolInvocations,
+    toUIMessage
+} from "@/lib/utils/ui-messages";
+
+const transport = new DefaultChatTransport<ChatUIMessage>({ api: "/api/chat" });
 
 const DefaultPrompts = dynamic(() => import("./defaultprompts"), {
     loading: () => <DefaultPromptsSkeleton />,
@@ -111,8 +127,10 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const isStreamingArtifactRef = useRef(false);
-    const lastProcessedMessageRef = useRef<string | null>(null);
-    const lastDataIndexRef = useRef<number | undefined>(undefined);
+    const lastProcessedMessageRef = useRef<ChatUIMessage | null>(null);
+    // Messages restored from the database are already processed and must not be
+    // re-run through processMessage (it would apply the current settings to them)
+    const loadedMessageIdsRef = useRef<Set<string>>(new Set());
     const shouldLoadChatRef = useRef(false);
     const shouldSaveRef = useRef(false);
     const combinedMessagesRef = useRef<CombinedMessage[]>([]);
@@ -123,7 +141,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         []
     );
 
-    const [repoContext, setRepoContext] = useState<any>(null);
+    // Connected GitHub repository; the ref lets save() read the latest value
+    const [repo, setRepo] = useState<RepoConnection | null>(null);
+    const repoRef = useRef<RepoConnection | null>(null);
 
     const [regeneratingMessageId, setRegeneratingMessageId] = useState<
         string | null
@@ -132,42 +152,49 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    const {
-        messages,
-        setMessages,
-        input,
-        append,
-        handleInputChange,
-        handleSubmit,
-        isLoading,
-        error,
-        stop,
-        reload,
-        data
-    } = useChat({
-        body: {
-            userId,
-            settings: state
-        },
-        onResponse: (response: Response) => {
-            shouldSaveRef.current = true;
-            console.log("Received response from server:", response);
-        },
-        onFinish: (message) => {
-            shouldSaveRef.current = true;
-            save();
-            console.log("Chat finished:", message);
-        },
-        onError: (error) => {
-            shouldSaveRef.current = true;
-            console.error("Chat error:", error.message);
-        },
-        maxSteps,
-        keepLastMessageOnError: true,
+    const [input, setInput] = useState("");
 
-        // run client-side tools that are automatically executed:
-        async onToolCall({ toolCall }) {}
-    });
+    const { messages, setMessages, sendMessage, status, error, stop, regenerate } =
+        useChat<ChatUIMessage>({
+            transport,
+            // Also called after stop() and errors. The save happens once the
+            // status settles and the final message has been processed (see below)
+            onFinish: ({ message }) => {
+                shouldSaveRef.current = true;
+                console.log("Chat finished:", message);
+            },
+            onError: (error) => {
+                shouldSaveRef.current = true;
+                console.error("Chat error:", error.message);
+            }
+        });
+
+    const isLoading = status === "submitted" || status === "streaming";
+
+    const requestOptions = { body: { userId, settings: state, repo } };
+
+    const addMessage = (message: NewMessage) => {
+        shouldSaveRef.current = true;
+        sendMessage({ text: message.content }, requestOptions);
+    };
+
+    const handleSubmit = (
+        event: React.FormEvent<HTMLFormElement>,
+        files?: FileList
+    ) => {
+        event.preventDefault();
+        if (!input.trim() && (!files || files.length === 0)) {
+            return;
+        }
+        shouldSaveRef.current = true;
+        sendMessage({ text: input, files }, requestOptions);
+        setInput("");
+    };
+
+    const reload = useCallback(() => {
+        shouldSaveRef.current = true;
+        regenerate({ body: { userId, settings: state, repo } });
+    }, [regenerate, userId, state, repo]);
 
     useEffect(() => {
         if (!path.includes("chat") && messages.length === 1) {
@@ -191,15 +218,14 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
                         const chatData = await response.json();
                         const newCombinedMessages = chatData.messages.slice();
-                        const newMessages = newCombinedMessages.map(
-                            (message: CombinedMessage) => ({
-                                id: message.id,
-                                role: message.role,
-                                content: message.originalContent,
-                                toolInvocations: message.toolInvocations
-                            })
-                        ) as Message[];
-                        setMessages(newMessages);
+                        repoRef.current = chatData.repo ?? null;
+                        setRepo(chatData.repo ?? null);
+                        loadedMessageIdsRef.current = new Set(
+                            newCombinedMessages.map(
+                                (message: CombinedMessage) => message.id
+                            )
+                        );
+                        setMessages(newCombinedMessages.map(toUIMessage));
                         setCombinedMessages(newCombinedMessages);
                         setArtifacts(
                             newCombinedMessages
@@ -245,7 +271,8 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             chatId,
             combinedMessagesRef.current[0].originalContent.slice(0, 50),
             combinedMessagesRef.current,
-            state
+            state,
+            repoRef.current
         );
         console.log("Save completed");
     }, [state, userId, chatId]);
@@ -321,8 +348,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
             if (!latestMessage) return;
 
+            const latestContent = getMessageText(latestMessage);
+            const toolInvocations = getToolInvocations(latestMessage);
+
             const { cleanedContent, artifact, model } = processMessage(
-                latestMessage.content,
+                latestContent,
                 combinedMessages[latestMessageIndex]?.model
             );
 
@@ -332,20 +362,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                 totalTokens,
                 cacheWriteTokens,
                 cacheReadTokens,
-                finishReason,
-                reasoning
-            } =
-                data && data.length > 0
-                    ? (data[data?.length - 1] as Data)
-                    : {
-                          promptTokens: undefined,
-                          completionTokens: undefined,
-                          totalTokens: undefined,
-                          cacheWriteTokens: undefined,
-                          cacheReadTokens: undefined,
-                          finishReason: undefined,
-                          reasoning: undefined
-                      };
+                finishReason
+            } = latestMessage.metadata ?? {};
+            const reasoning = getMessageReasoning(latestMessage) || undefined;
 
             setShowContinueButton(
                 finishReason === "length" && latestMessage.role === "assistant"
@@ -365,11 +384,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     newCombinedMessages[regeneratedIndex] = {
                         ...newCombinedMessages[regeneratedIndex],
                         id: latestMessage.id, // Update with the new message ID
-                        originalContent: latestMessage.content,
+                        originalContent: latestContent,
                         processedContent: cleanedContent,
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
+                        toolInvocations,
                         promptTokens,
                         completionTokens,
                         totalTokens,
@@ -395,19 +414,26 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                 );
 
                 if (existingMessageIndex !== -1) {
-                    // Update existing message
+                    // Update existing message. Usage and reasoning only arrive at
+                    // certain points of the stream, so keep earlier values
+                    const existing = newCombinedMessages[existingMessageIndex];
                     newCombinedMessages[existingMessageIndex] = {
-                        ...newCombinedMessages[existingMessageIndex],
-                        originalContent: latestMessage.content,
+                        ...existing,
+                        originalContent: latestContent,
                         processedContent: cleanedContent,
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
-                        promptTokens,
-                        completionTokens,
-                        totalTokens,
-                        finishReason,
-                        reasoning,
+                        toolInvocations,
+                        promptTokens: promptTokens ?? existing.promptTokens,
+                        completionTokens:
+                            completionTokens ?? existing.completionTokens,
+                        totalTokens: totalTokens ?? existing.totalTokens,
+                        cacheWriteTokens:
+                            cacheWriteTokens ?? existing.cacheWriteTokens,
+                        cacheReadTokens:
+                            cacheReadTokens ?? existing.cacheReadTokens,
+                        finishReason: finishReason ?? existing.finishReason,
+                        reasoning: reasoning ?? existing.reasoning,
                         states: [
                             ...newCombinedMessages[
                                 existingMessageIndex
@@ -424,12 +450,12 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     newCombinedMessages.push({
                         id: latestMessage.id,
                         role: latestMessage.role,
-                        originalContent: latestMessage.content,
+                        originalContent: latestContent,
                         processedContent: cleanedContent || "",
-                        attachments: latestMessage.experimental_attachments,
+                        attachments: getAttachments(latestMessage),
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
+                        toolInvocations,
                         promptTokens,
                         completionTokens,
                         totalTokens,
@@ -449,6 +475,8 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             }
 
             setCombinedMessages(newCombinedMessages);
+            // Keep the ref current so a save in this pass includes this update
+            combinedMessagesRef.current = newCombinedMessages;
 
             if (shouldSaveRef.current) {
                 console.log("COMBINED MESSAGE SHOULD SAVE...");
@@ -459,17 +487,15 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         const latestMessageIndex = messages.length - 1;
         const latestMessage = messages[latestMessageIndex];
 
+        // useChat replaces the message object whenever its parts or metadata change
         if (
-            (latestMessage &&
-                latestMessage.content !== lastProcessedMessageRef.current) ||
-            (data && lastDataIndexRef.current != data.length)
+            latestMessage &&
+            latestMessage !== lastProcessedMessageRef.current &&
+            !loadedMessageIdsRef.current.has(latestMessage.id)
         ) {
             processMessages();
 
-            lastProcessedMessageRef.current = latestMessage.content;
-            lastDataIndexRef.current = data?.length;
-
-            console.log("MESSAGES: ", combinedMessages);
+            lastProcessedMessageRef.current = latestMessage;
         }
     }, [
         messages,
@@ -477,9 +503,14 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         processMessage,
         combinedMessages,
         regeneratingMessageId,
-        data,
         save
     ]);
+
+    useEffect(() => {
+        if ((status === "ready" || status === "error") && shouldSaveRef.current) {
+            save();
+        }
+    }, [status, save]);
 
     // Modify the reload function to set the regeneratingMessageId
     const handleReload = useCallback(() => {
@@ -489,7 +520,6 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         if (lastAssistantMessage) {
             setRegeneratingMessageId(lastAssistantMessage.id);
         }
-        shouldSaveRef.current = true;
         reload();
     }, [combinedMessages, reload]);
 
@@ -521,44 +551,12 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         scrollToBottom();
     }, [combinedMessages, scrollToBottom]);
 
-    // Instead of this, when you connect to a repo, only the structure and README.md file is passed into the system prompt
-    // Then, when the user aks about anything in the repo, the assistant can call the get_repo_contents tool to grab the contents of a file from the repo
-    // The repo content is cached when connecting so the tool call is quick.
-    const handleRepoSelect = async (repoUrl: string) => {
-        try {
-            const response = await fetch("/api/github", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ repoUrl })
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to load repository context");
-            }
-
-            const context = await response.json();
-            setRepoContext(context);
-            // Add repository context to the chat
-            append({
-                id: generateId(),
-                role: "user",
-                content:
-                    `Repository context loaded from ${repoUrl}. The assistant now have access to the repository structure and contents. The assistant can reference this information when answering questions about the codebase.\n\n` +
-                    `Repository Information:\n` +
-                    `Name: ${context.repoInfo.name}\n` +
-                    `Description: ${context.repoInfo.description}\n` +
-                    `Primary Language: ${context.repoInfo.language}\n` +
-                    `Stars: ${context.repoInfo.stars}\n` +
-                    `Forks: ${context.repoInfo.forks}\n\n` +
-                    `Repository Structure and Contents:\n\n` +
-                    `${context.formattedContent.slice(1000)}`
-            });
-            toast.success("Repository connected and analyzed successfully!");
-        } catch (error) {
-            console.error("Error loading repository context:", error);
-            toast.error("Failed to load repository context");
+    const updateRepo = (connection: RepoConnection | null) => {
+        repoRef.current = connection;
+        setRepo(connection);
+        // Persist the change for chats that already exist
+        if (combinedMessagesRef.current.length > 0) {
+            save();
         }
     };
 
@@ -579,7 +577,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     settings={state}
                     dispatch={dispatch}
                 />
-                <div className="flex flex-grow overflow-hidden">
+                <div className="flex grow overflow-hidden">
                     <div
                         className={`flex flex-col ${
                             isArtifactsOpen ? "w-[55%]" : "w-full"
@@ -600,21 +598,25 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             isSidebarOpen={isSidebarOpen}
                             onSidebarOpenChange={setIsSidebarOpen}
                         />
-                        <GitHubRepoSelector onRepoSelect={handleRepoSelect} />
+                        <GitHubRepoSelector
+                            connection={repo}
+                            onConnect={updateRepo}
+                            onDisconnect={() => updateRepo(null)}
+                        />
                         <div
                             ref={messagesContainerRef}
-                            className="flex-grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
+                            className="grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
                         >
-                            <div className="flex-shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
+                            <div className="shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
                                 {combinedMessages.length === 0 &&
                                 !path.includes("chat") ? (
-                                    <DefaultPrompts addMessage={append} />
+                                    <DefaultPrompts addMessage={addMessage} />
                                 ) : (
                                     <Messages
                                         messages={combinedMessages}
                                         onArtifactClick={openArtifact}
                                         onRegenerate={handleReload}
-                                        addMessage={append}
+                                        addMessage={addMessage}
                                     />
                                 )}
                                 {error && (
@@ -629,11 +631,13 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                         <ContinueButton
                             show={showContinueButton}
                             onHide={() => setShowContinueButton(false)}
-                            appendMessage={append}
+                            appendMessage={addMessage}
                         />
                         <ChatFooter
                             input={input}
-                            handleInputChange={handleInputChange}
+                            handleInputChange={(event) =>
+                                setInput(event.target.value)
+                            }
                             handleSubmit={handleSubmit}
                             isLoading={isLoading}
                             handleStop={() => {

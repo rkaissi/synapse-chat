@@ -24,7 +24,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
                     value="reasoning"
                     className="border border-gray-200/50 rounded-lg bg-gray-50/80"
                 >
-                    <AccordionTrigger className="px-4 py-3 text-sm font-medium text-gray-700 hover:no-underline hover:bg-gray-100/80 rounded-t-lg [&[data-state=open]]:rounded-b-none">
+                    <AccordionTrigger className="px-4 py-3 text-sm font-medium text-gray-700 hover:no-underline hover:bg-gray-100/80 rounded-t-lg data-[state=open]:rounded-b-none">
                         Reasoning
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4 bg-white rounded-b-lg">

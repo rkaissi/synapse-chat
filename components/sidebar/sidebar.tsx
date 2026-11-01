@@ -2,7 +2,7 @@ import React, { useRef } from "react";
 import { memo, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageSquare } from "lucide-react";
-import { usePathname, redirect } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { SidebarSkeleton } from "./sidebarskeleton";
@@ -24,6 +24,7 @@ const SCROLL_THRESHOLD = 100;
 
 export const Sidebar = memo(function Sidebar({ userId }: Props) {
     const pathname = usePathname();
+    const router = useRouter();
     const [chats, setChats] = useState<Chat[]>([]);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -231,17 +232,17 @@ export const Sidebar = memo(function Sidebar({ userId }: Props) {
                                         transform: `translateY(${virtualRow.start}px)`
                                     }}
                                     onClick={() =>
-                                        redirect(`/chat/${chat._id}`)
+                                        router.push(`/chat/${chat._id}`)
                                     }
                                 >
                                     <div className="flex items-start w-full">
-                                        <MessageSquare className="mr-2 h-5 w-5 flex-shrink-0 mt-0.5" />
+                                        <MessageSquare className="mr-2 h-5 w-5 shrink-0 mt-0.5" />
                                         <div className="flex flex-col items-start overflow-hidden w-full">
                                             <div className="flex justify-between w-full">
                                                 <span className="text-sm font-medium truncate flex-1">
                                                     {truncateText(chat.name)}
                                                 </span>
-                                                <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                                                <span className="text-xs text-muted-foreground ml-2 shrink-0">
                                                     {formatDate(chat.updatedAt)}
                                                 </span>
                                             </div>

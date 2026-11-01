@@ -19,8 +19,8 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
         return NextResponse.json({
             success: true,
-            messages: chat.messages
-            // Include other chat data as needed
+            messages: chat.messages,
+            repo: chat.repo ?? null
         });
     } catch (error) {
         console.error("Error in GET /api/chat/[id]:", error);

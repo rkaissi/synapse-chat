@@ -1,7 +1,7 @@
 import { date } from "@/app/api/chat/config";
 import { models } from "@/lib/utils/model-provider";
 
-export const model = models.gpt4omini;
+export const model = models.gpt6luna;
 export const temperature = 0.3;
 export const maxTokens = 512;
 

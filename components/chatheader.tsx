@@ -26,19 +26,17 @@ import {
     MessagesSquareIcon,
     SettingsIcon,
     SparklesIcon,
-    WrenchIcon,
-    FileStackIcon,
     PanelLeftIcon,
     PanelRightIcon,
     ShapesIcon,
     GroupIcon,
-    FishIcon,
     FishSymbolIcon
 } from "lucide-react";
 import { AutoIcon, SparkleIcon, ZapIcon } from "./icons";
 import { ModelKey, ModelProvider } from "@/lib/utils/model-provider";
 import { useMemo, useState } from "react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { dispatchNewChat } from "@/lib/utils/new-chat";
 
 export const modelInfo: Partial<
     Record<
@@ -51,102 +49,76 @@ export const modelInfo: Partial<
         }
     >
 > = {
-    claude4sonnet: {
-        name: "Claude Sonnet 4",
+    claudeopus55: {
+        name: "Claude Opus 5.5",
         description:
-            "Anthropic's latest and most intelligent model, great for various applications.",
-        icon: SparklesIcon,
-        provider: ModelProvider.Anthropic
-    },
-    claude37sonnet: {
-        name: "Claude Sonnet 3.7",
-        description: "Anthropic's previous most intelligent model.",
-        icon: SparkleIcon,
-        provider: ModelProvider.Anthropic
-    },
-    claude4opus: {
-        name: "Claude Opus 4",
-        description:
-            "Anthropic's powerful and most capable model for highly complex tasks.",
+            "Anthropic's most capable model for complex reasoning, coding and agentic work.",
         icon: LightbulbIcon,
         provider: ModelProvider.Anthropic
     },
-    claude35haiku: {
-        name: "Claude Haiku 3.5",
-        description: "Fastest Anthropic model for near-instant responses.",
+    claudesonnet55: {
+        name: "Claude Sonnet 5.5",
+        description:
+            "Anthropic's balance of intelligence and speed for everyday work.",
+        icon: SparklesIcon,
+        provider: ModelProvider.Anthropic
+    },
+    claudehaiku55: {
+        name: "Claude Haiku 5.5",
+        description: "Anthropic's fastest model for near-instant responses.",
         icon: ZapIcon,
         provider: ModelProvider.Anthropic
     },
-    chatgpt4o: {
-        name: "ChatGPT-4o",
-        description:
-            "Latest version of GPT-4o in ChatGPT optimized for chat uses.",
+    claudefable51: {
+        name: "Claude Fable 5.1",
+        description: "Anthropic's Fable model.",
         icon: MessageSquareTextIcon,
+        provider: ModelProvider.Anthropic
+    },
+    gpt6astra: {
+        name: "GPT-6 Astra",
+        description:
+            "OpenAI's flagship model for complex reasoning and coding.",
+        icon: GroupIcon,
         provider: ModelProvider.OpenAI
     },
-    gpt4o: {
-        name: "GPT-4o",
-        description: "Most capable GPT-4 model for a wide range of tasks.",
+    gpt61sol: {
+        name: "GPT-6.1 Sol",
+        description:
+            "Near-Astra performance for complex work at a lower cost.",
         icon: SparkleIcon,
         provider: ModelProvider.OpenAI
     },
-    gpt4omini: {
-        name: "GPT-4o mini",
-        description: "Fast and efficient for most everyday tasks.",
+    gpt61terra: {
+        name: "GPT-6.1 Terra",
+        description:
+            "Fast, efficient model for visual reasoning and natural writing.",
+        icon: MessageSquareTextIcon,
+        provider: ModelProvider.OpenAI
+    },
+    gpt6luna: {
+        name: "GPT-6 Luna",
+        description: "OpenAI's most efficient model for everyday tasks.",
         icon: ZapIcon,
         provider: ModelProvider.OpenAI
     },
-    gpt41: {
-        name: "GPT-4.1",
-        description: "OpenAI's latest flagship model.",
-        icon: GroupIcon,
-        provider: ModelProvider.OpenAI
-    },
-    o4mini: {
-        name: "o4-mini",
+    gptoss120b: {
+        name: "GPT-OSS 120B",
         description:
-            "Faster and cheaper reasoning model particularly good at coding, math, and science.",
-        icon: GroupIcon,
-        provider: ModelProvider.OpenAI
-    },
-    deepseek_r1_distill_llama_70b: {
-        name: "DeepSeek R1 (Distill Llama 70B)",
-        description:
-            "Frontier thinking model by DeepSeek, distilled and hosted by Meta on Groq.",
-        icon: FishIcon,
-        provider: ModelProvider.Groq
-    },
-    llama33_70b_specdec: {
-        name: "Llama 3.3 70B Specdec",
-        description:
-            "Llama model from Groq specifically designed with speed in mind (Speculative Decoding).",
-        icon: WrenchIcon,
-        provider: ModelProvider.Groq
-    },
-    llama33_70b_versatile: {
-        name: "Llama 3.3 70B Versatile",
-        description:
-            "Capable and versatile open source model from Meta using Groq.",
+            "OpenAI's open-weight reasoning model with tool use, hosted on Groq.",
         icon: BookOpenIcon,
         provider: ModelProvider.Groq
     },
-    llama32_90b_vision: {
-        name: "Llama 3.2 90B Vision",
+    gptoss20b: {
+        name: "GPT-OSS 20B",
         description:
-            "Multi-modal open source model with image reasoning from Meta using Groq.",
-        icon: FileStackIcon,
-        provider: ModelProvider.Groq
-    },
-    llama31_8b: {
-        name: "Llama 3.1 8B",
-        description:
-            "Instant responses from Llama 3.1 8B using Groq LPU AI inference.",
+            "Smaller, very fast open-weight reasoning model from OpenAI on Groq.",
         icon: GaugeIcon,
         provider: ModelProvider.Groq
     },
-    mixtral_8x7b: {
-        name: "Mixtral 8x7B (Groq)",
-        description: "Open source Mixtral of experts model from Mistral AI.",
+    qwen38_27b: {
+        name: "Qwen 3.8 27B",
+        description: "Open-weight thinking model from Alibaba Cloud on Groq.",
         icon: BlendIcon,
         provider: ModelProvider.Groq
     },
@@ -199,6 +171,7 @@ const ChatHeader = ({
     onSidebarOpenChange
 }: Props) => {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
 
     const handleModelChange = (model: ModelKey) => {
         onModelSelect(model);
@@ -243,7 +216,10 @@ const ChatHeader = ({
                         variant="outline"
                         size="icon"
                         aria-label="Open new chat"
-                        onClick={() => redirect("/chat")} // or just redirect to "/"
+                        onClick={() => {
+                            router.push("/");
+                            dispatchNewChat();
+                        }}
                     >
                         <MessageSquarePlusIcon className="h-5 w-5" />
                     </Button>

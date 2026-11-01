@@ -148,7 +148,7 @@ const ReadUrlCard: React.FC<ReadUrlCardProps> = ({
                             {getHostname}
                         </span>
                     </DialogDescription>
-                    <div className="flex-grow overflow-auto">
+                    <div className="grow overflow-auto">
                         <div className="flex flex-col h-full w-full">
                             {returnFormat === "screenshot" ? (
                                 <Image

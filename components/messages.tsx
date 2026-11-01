@@ -1,4 +1,4 @@
-import { CombinedMessage } from "@/lib/types";
+import { CombinedMessage, NewMessage } from "@/lib/types";
 import { useCallback, useMemo, useState } from "react";
 import {
     Avatar,
@@ -23,7 +23,6 @@ import {
     ChevronUpIcon
 } from "lucide-react";
 import { USER_NAME } from "@/app/api/chat/config";
-import { Message } from "ai";
 import dynamic from "next/dynamic";
 import { models } from "@/lib/utils/model-provider";
 import ReadUrlCard from "./tools/readurl";
@@ -72,7 +71,7 @@ interface MessagesProps {
     messages: CombinedMessage[];
     onArtifactClick: (identifier: string) => void;
     onRegenerate?: () => void;
-    addMessage?: (message: Message) => void;
+    addMessage?: (message: NewMessage) => void;
 }
 
 export const Messages = ({
@@ -108,7 +107,7 @@ interface UserMessageProps {
 export const UserMessage = ({ message }: UserMessageProps) => {
     return (
         <div className="flex items-start gap-4">
-            <Avatar className="w-9 h-9 border flex-shrink-0">
+            <Avatar className="w-9 h-9 border shrink-0">
                 <AvatarImage
                     src={`https://avatar.oxro.io/avatar.svg?name=${USER_NAME.replace(
                         " ",
@@ -138,7 +137,7 @@ interface AssistantMessageProps {
     isLatestResponse: boolean;
     onArtifactClick?: (identifier: string) => void;
     onRegenerate?: () => void;
-    addMessage?: (message: Message) => void;
+    addMessage?: (message: NewMessage) => void;
 }
 
 export const AssistantMessage = ({
@@ -203,15 +202,18 @@ export const AssistantMessage = ({
         );
     }, [message, onArtifactClick]);
 
-    const formatToolArgs = (args: Record<string, any>): string => {
-        return Object.entries(args)
+    // args is empty while the tool input is still streaming
+    const formatToolArgs = (args?: Record<string, any>): string => {
+        return Object.entries(args ?? {})
             .map(([key, value]) => {
                 const formattedKey = key.replace(/([A-Z])/g, " $1").trim();
                 const capitalizedKey =
                     formattedKey.charAt(0).toUpperCase() +
                     formattedKey.slice(1);
                 const formattedValue =
-                    typeof value === "string" ? value : JSON.stringify(value);
+                    typeof value === "string"
+                        ? value
+                        : (JSON.stringify(value) ?? "");
                 return `${capitalizedKey}: ${formattedValue.substring(0, 500)}`;
             })
             .join("\n");
@@ -311,12 +313,12 @@ export const AssistantMessage = ({
                             )
                         }
                     >
-                        <div className="flex-shrink-0 w-10 h-10 mr-3">
+                        <div className="shrink-0 w-10 h-10 mr-3">
                             <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-md">
                                 <FileIcon className="h-5 w-5 text-gray-500" />
                             </div>
                         </div>
-                        <div className="flex-grow min-w-0 overflow-hidden">
+                        <div className="grow min-w-0 overflow-hidden">
                             <p className="text-sm font-medium text-gray-900 truncate">
                                 transcript.txt
                             </p>
@@ -487,7 +489,7 @@ export const AssistantMessage = ({
     return (
         <>
             <div className="flex items-start gap-4">
-                <Avatar className="w-9 h-9 border flex-shrink-0">
+                <Avatar className="w-9 h-9 border shrink-0">
                     <AvatarImage src="/placeholder-user.jpg" />
                     <AvatarFallback>OA</AvatarFallback>
                 </Avatar>

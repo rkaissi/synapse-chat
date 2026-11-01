@@ -32,10 +32,15 @@ const chatSchema: Schema = new Schema(
         userId: { type: String, required: true, ref: "User" },
         name: { type: String, default: "New Chat", required: true },
         messages: { type: [messageSchema], required: true },
-        public: { type: Boolean, default: false, required: true }
+        public: { type: Boolean, default: false, required: true },
+        // Connected GitHub repository (RepoConnection in lib/types)
+        repo: { type: Schema.Types.Mixed, default: null }
     },
     { timestamps: true }
 );
+
+// Serves the chat history query in /api/chats
+chatSchema.index({ userId: 1, updatedAt: -1 });
 
 const Chat = mongoose.models.Chat || mongoose.model("Chat", chatSchema);
 export default Chat;

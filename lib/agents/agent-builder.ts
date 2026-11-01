@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getModel, ModelConfig } from "@/lib/utils/model-provider";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 
 // Define the Agent interface
 interface Agent {
@@ -354,16 +354,17 @@ export class AgentBuilder {
             execute: async (prompt: string, context?: string) => {
                 const fullPrompt = `Instructions: ${prompt}\n\nContext: ${context}\n\nInstructions: ${prompt}`;
 
-                const { object } = await generateObject({
+                const { output } = await generateText({
                     model: getModel(config.model),
-                    system: config.role,
+                    instructions: config.role,
                     temperature: config.temperature,
-                    maxTokens: config.maxTokens,
+                    maxOutputTokens: config.maxTokens,
                     prompt: fullPrompt,
-                    schema: config.schema
+                    output: Output.object({ schema: config.schema }),
+                    providerOptions: { openai: { strictJsonSchema: false } }
                 });
 
-                return object;
+                return output;
             }
         };
     }

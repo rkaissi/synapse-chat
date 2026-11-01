@@ -29,7 +29,7 @@ const WikipediaSearchCard: React.FC<WikipediaSearchCardProps> = ({
                             index > 0 ? "mt-4" : ""
                         }`}
                     >
-                        <div className="relative h-16 w-16 flex-shrink-0 mt-1">
+                        <div className="relative h-16 w-16 shrink-0 mt-1">
                             <Image
                                 className="rounded-lg object-cover h-16"
                                 src={
@@ -43,7 +43,7 @@ const WikipediaSearchCard: React.FC<WikipediaSearchCardProps> = ({
                                 unoptimized
                             />
                         </div>
-                        <div className="flex-grow">
+                        <div className="grow">
                             <h4 className="text-md font-semibold">
                                 {result.title}
                             </h4>

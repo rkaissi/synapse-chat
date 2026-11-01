@@ -3,7 +3,8 @@ import React, {
     useCallback,
     useEffect,
     useRef,
-    MutableRefObject
+    useMemo,
+    RefObject
 } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +55,7 @@ interface Props {
     setCurrentArtifactIndex: (index: number) => void;
     activeTab: string;
     setActiveTab: (tab: string) => void;
-    isStreamingArtifactRef: MutableRefObject<boolean>;
+    isStreamingArtifactRef: RefObject<boolean>;
 }
 
 export function ArtifactsWindow({
@@ -75,14 +76,31 @@ export function ArtifactsWindow({
     const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
-    const [html, setHtml] = useState("");
+    const html = useMemo(
+        () =>
+            activeTab === "preview" && currentArtifact?.type === "text/markdown"
+                ? markdownToHtml(currentArtifact.content)
+                : "",
+        [activeTab, currentArtifact]
+    );
+
+    // Reset the console when switching artifacts
+    const [consoleArtifactIndex, setConsoleArtifactIndex] =
+        useState(currentArtifactIndex);
+    if (consoleArtifactIndex !== currentArtifactIndex) {
+        setConsoleArtifactIndex(currentArtifactIndex);
+        setConsoleLogs([]);
+    }
 
     const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
 
     const handleShareClick = useCallback(() => {
+        if (isStreamingArtifactRef.current) {
+            return;
+        }
         setIsShareDialogOpen(true);
-    }, []);
+    }, [isStreamingArtifactRef]);
 
     const handlePublishArtifact = useCallback(async () => {
         if (currentArtifact && !currentArtifact?.shareableURL) {
@@ -99,6 +117,9 @@ export function ArtifactsWindow({
                 if (response.ok) {
                     const { id } = await response.json();
                     const link = `${window.location.origin}/artifacts/${id}`;
+                    // The artifact object is shared with the chat's saved messages,
+                    // so mutating it also persists the link with the chat
+                    // eslint-disable-next-line react-hooks/immutability
                     currentArtifact.shareableURL = link;
                 } else {
                     console.error("Failed to publish artifact");
@@ -111,20 +132,6 @@ export function ArtifactsWindow({
         }
     }, [currentArtifact]);
 
-    useEffect(() => {
-        setConsoleLogs([]);
-    }, [currentArtifactIndex]);
-
-    useEffect(() => {
-        if (
-            activeTab === "preview" &&
-            currentArtifact &&
-            currentArtifact.type === "text/markdown"
-        ) {
-            setHtml(markdownToHtml(currentArtifact.content));
-        }
-    }, [activeTab, currentArtifact]);
-
     const handleClearConsole = useCallback(() => {
         setConsoleLogs([]);
     }, []);
@@ -135,7 +142,7 @@ export function ArtifactsWindow({
 
             return (
                 <div className="flex flex-col h-full">
-                    <div className="flex-grow overflow-auto">
+                    <div className="grow overflow-auto">
                         <PreviewComponent
                             artifact={artifact}
                             setConsoleLogs={setConsoleLogs}
@@ -276,7 +283,7 @@ export function ArtifactsWindow({
                                     </pre>
                                 </td>
                                 <td className="align-top p-0">
-                                    <pre className="m-0 overflow-auto !text-nowrap">
+                                    <pre className="m-0 overflow-auto text-nowrap!">
                                         <code
                                             className={`hljs ${detectedLang}`}
                                             dangerouslySetInnerHTML={{
@@ -352,7 +359,7 @@ export function ArtifactsWindow({
                         </Button>
                     </div>
                 </div>
-                <div className="flex-grow overflow-hidden">
+                <div className="grow overflow-hidden">
                     {activeTab === "preview" &&
                         currentArtifact?.type !== "application/code" && (
                             <div className="h-full overflow-y-auto">
@@ -419,9 +426,7 @@ export function ArtifactsWindow({
                                 className="rounded-full"
                                 onClick={handleShareClick}
                                 disabled={
-                                    !currentArtifact ||
-                                    !currentArtifact.content ||
-                                    isStreamingArtifactRef.current
+                                    !currentArtifact || !currentArtifact.content
                                 }
                             >
                                 <ShareIcon className="w-5 h-5" />

@@ -15,7 +15,7 @@ interface Props {
     handleInputChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
     handleSubmit: (
         event: React.FormEvent<HTMLFormElement>,
-        options?: any
+        files?: FileList
     ) => void;
     isLoading: boolean;
     handleStop: () => void;
@@ -24,6 +24,9 @@ interface Props {
 }
 
 const LARGE_TEXT_THRESHOLD = 2000;
+
+const timestampedFileName = (prefix: string, extension?: string) =>
+    `${prefix}-${Date.now()}${extension ? `.${extension}` : ""}`;
 
 const ChatFooter = ({
     input,
@@ -204,7 +207,7 @@ const ChatFooter = ({
                         <FileIcon className="h-5 w-5 text-gray-600" />
                     </div>
                 )}
-                <span className="text-sm truncate flex-grow">{file.name}</span>
+                <span className="text-sm truncate grow">{file.name}</span>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -247,7 +250,7 @@ const ChatFooter = ({
                         const fileExtension = blob.type.split("/")[1] || "png";
                         const file = new File(
                             [blob],
-                            `image-${Date.now()}.${fileExtension}`,
+                            timestampedFileName("image", fileExtension),
                             { type: blob.type }
                         );
                         addFile(file);
@@ -260,7 +263,7 @@ const ChatFooter = ({
 
                 if (text.length > LARGE_TEXT_THRESHOLD) {
                     event.preventDefault();
-                    const file = new File([text], `pasted-text-${Date.now()}`, {
+                    const file = new File([text], timestampedFileName("pasted-text"), {
                         type: "text/plain"
                     });
                     addFile(file);
@@ -294,15 +297,15 @@ const ChatFooter = ({
                 onClose={() => setIsModalOpen(false)}
                 file={selectedFile}
             />
-            <div className="flex flex-grow-0 w-full bg-background py-2 px-4 border-t align-middle items-center justify-center">
+            <div className="flex grow-0 w-full bg-background py-2 px-4 border-t align-middle items-center justify-center">
                 <form
                     className="relative max-w-[650px] w-full"
                     onSubmit={(event) => {
-                        if (disabled) return;
-                        handleSubmit(event, {
-                            experimental_attachments: files,
-                            allowEmptySubmit: true
-                        });
+                        if (disabled) {
+                            event.preventDefault();
+                            return;
+                        }
+                        handleSubmit(event, files);
                         setFiles(undefined);
                         if (fileInputRef.current) {
                             fileInputRef.current.value = "";
@@ -335,24 +338,24 @@ const ChatFooter = ({
                     <div
                         className={`${
                             isMultiline ? "rounded-2xl" : "rounded-full"
-                        } border border-neutral-400 shadow-sm bg-grey-100 w-full flex items-center min-h-[48px] max-h-[136px] overflow-hidden z-10`}
+                        } border border-neutral-400 shadow-xs bg-grey-100 w-full flex items-center min-h-[48px] max-h-[136px] overflow-hidden z-10`}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleDrop}
                     >
-                        <div className="flex-shrink-0 w-12 h-full" />
+                        <div className="shrink-0 w-12 h-full" />
                         <textarea
                             ref={textareaRef}
                             placeholder="Message Assistant"
                             name="message"
                             id="message"
-                            className="resize-none py-3 px-1 m-0 w-full focus:outline-none bg-transparent border-none z-10"
+                            className="resize-none py-3 px-1 m-0 w-full focus:outline-hidden bg-transparent border-none z-10"
                             value={input}
                             onChange={handleTextareaChange}
                             onKeyDown={handleKeyDown}
                             onPaste={handlePaste}
                             rows={1}
                         />
-                        <div className="flex-shrink-0 w-12 h-full" />
+                        <div className="shrink-0 w-12 h-full" />
                     </div>
                     <Button
                         type={isLoading ? "button" : "submit"}
