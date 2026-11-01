@@ -1,4 +1,4 @@
-import type { LanguageModelV1Middleware } from 'ai';
+import type { LanguageModelMiddleware } from 'ai';
 
 export interface ExtractedArtifact {
     identifier: string;
@@ -103,24 +103,17 @@ export function extractArtifacts(content: string): {
  * Middleware to extract artifacts from AI model responses
  * This middleware processes complete (non-streaming) responses only
  */
-export const artifactExtractionMiddleware: LanguageModelV1Middleware = {
-    wrapGenerate: async ({ doGenerate, params }) => {
+export const artifactExtractionMiddleware: LanguageModelMiddleware = {
+    wrapGenerate: async ({ doGenerate }) => {
         const result = await doGenerate();
-        
-        if (!result.text) {
-            return result;
-        }
-        
-        const { cleanedContent, artifacts } = extractArtifacts(result.text);
-        
+
         return {
             ...result,
-            text: cleanedContent,
-            // Store artifacts in response metadata for access by the calling code
-            responseMetadata: {
-                artifacts: artifacts,
-                hasArtifacts: artifacts.length > 0
-            }
+            content: result.content.map((part) =>
+                part.type === "text"
+                    ? { ...part, text: extractArtifacts(part.text).cleanedContent }
+                    : part
+            )
         };
     }
 };

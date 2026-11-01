@@ -45,11 +45,17 @@ export async function GET(request: Request) {
                 'messages': { $slice: -1 }
             }
         )
-        .hint({ userId: 1, updatedAt: -1 })
         .sort({ updatedAt: -1 })
         .limit(limit)
         .allowDiskUse(true)
-        .lean()
+        .lean<
+            {
+                _id: unknown;
+                name: string;
+                updatedAt: Date;
+                messages?: { originalContent?: string }[];
+            }[]
+        >()
         .exec();
 
         // Get the total count for initial load only

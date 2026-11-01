@@ -1,4 +1,4 @@
-import { cosineSimilarity, generateObject } from "ai";
+import { cosineSimilarity, generateText, Output } from "ai";
 import { getModel } from "@/lib/utils/model-provider";
 import { generateEmbedding, generateEmbeddings } from "@/lib/utils/embeddings";
 import User from "@/models/user";
@@ -22,10 +22,11 @@ export const extractMemory = async (message: string, userId: string) => {
         content: memory.content
     }));
 
-    const { object } = await generateObject({
+    const { output } = await generateText({
         model: getModel(model),
-        system,
-        schema: memorySchema,
+        instructions: system,
+        output: Output.object({ schema: memorySchema }),
+        providerOptions: { openai: { strictJsonSchema: false } },
         prompt: `
 Here is the message to analyze:
 <message>
@@ -40,10 +41,10 @@ ${JSON.stringify(existingMemories)}
 Analyze the message and, if necessary, decide which memories to create, update, or delete based on the existing memories and the new information provided.
 `,
         temperature,
-        maxTokens
+        maxOutputTokens: maxTokens
     });
 
-    const actions = object.actions;
+    const actions = output.actions;
 
     if (!actions || actions.length === 0) {
         return;

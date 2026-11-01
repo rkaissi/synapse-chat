@@ -1,25 +1,19 @@
 import { openai } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { groq } from "@ai-sdk/groq";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
 import {
     defaultSettingsMiddleware,
     extractReasoningMiddleware,
-    LanguageModelV1Middleware,
+    LanguageModelMiddleware,
     wrapLanguageModel
 } from "ai";
-
-const groq = createOpenAICompatible({
-    name: "groq",
-    baseURL: "https://api.groq.com/openai/v1",
-    apiKey: process.env.GROQ_API_KEY
-});
 
 export const embeddingModel = openai.embedding("text-embedding-3-small");
 export const imageModel = openai.image("dall-e-3");
 
-export const thinkingMiddleware: LanguageModelV1Middleware = {
-    transformParams: async ({ type, params }) => {
+export const thinkingMiddleware: LanguageModelMiddleware = {
+    transformParams: async ({ params }) => {
         return {
             ...params,
             prompt: params.prompt?.map((message, index) => {
@@ -51,10 +45,10 @@ export const thinkingMiddleware: LanguageModelV1Middleware = {
 };
 
 const reasoning = wrapLanguageModel({
-    model: anthropic("claude-sonnet-4-0", { cacheControl: true }),
+    model: anthropic("claude-opus-5-5"),
     middleware: defaultSettingsMiddleware({
         settings: {
-            providerMetadata: {
+            providerOptions: {
                 anthropic: {
                     thinking: { type: "enabled", budgetTokens: 12000 }
                 }
@@ -80,36 +74,18 @@ export interface ModelConfig {
 }
 
 export type ModelKey =
-    | "gpt41"
-    | "gpt41mini"
-    | "gpt41nano"
-    | "o4mini"
-    | "o3"
-    | "o3pro"
-    | "o3mini"
-    | "o1"
-    | "o1pro"
-    | "chatgpt4o"
-    | "gpt4o"
-    | "gpt4omini"
-    | "gpt4turbo"
-    | "gpt4"
-    | "gpt35"
-    | "claude4opus"
-    | "claude4sonnet"
-    | "claude37sonnet"
-    | "claude35sonnet"
-    | "claude3opus"
-    | "claude35haiku"
+    | "gpt6astra"
+    | "gpt61sol"
+    | "gpt61terra"
+    | "gpt6luna"
+    | "claudeopus55"
+    | "claudesonnet55"
+    | "claudehaiku55"
+    | "claudefable51"
     | "azureGpt4o"
-    | "llama33_70b_specdec"
-    | "llama33_70b_versatile"
-    | "llama32_90b_vision"
-    | "llama32_11b_vision"
-    | "llama31_8b"
-    | "mixtral_8x7b"
-    | "gemma2_9b_it"
-    | "deepseek_r1_distill_llama_70b"
+    | "gptoss120b"
+    | "gptoss20b"
+    | "qwen38_27b"
     | "gptLatest"
     | "claudeLatest"
     | "azureLatest"
@@ -120,197 +96,88 @@ export type ModelKey =
 
 // Used to specify a model other than the DEFAULT_MODEL_CONFIG for certain usage
 export const models: { [key in ModelKey]: ModelConfig } = {
-    gpt41: {
-        model: "gpt-4.1",
-        name: "GPT-4.1",
+    gpt6astra: {
+        model: "gpt-6-astra",
+        name: "GPT-6 Astra",
         provider: ModelProvider.OpenAI,
-        maxTokens: 32768
+        maxTokens: 128000
     },
-    gpt41mini: {
-        model: "gpt-4.1-mini",
-        name: "GPT-4.1-mini",
+    gpt61sol: {
+        model: "gpt-6.1-sol",
+        name: "GPT-6.1 Sol",
         provider: ModelProvider.OpenAI,
-        maxTokens: 32768
+        maxTokens: 128000
     },
-    gpt41nano: {
-        model: "gpt-4.1-nano",
-        name: "GPT-4.1-nano",
+    gpt61terra: {
+        model: "gpt-6.1-terra",
+        name: "GPT-6.1 Terra",
         provider: ModelProvider.OpenAI,
-        maxTokens: 32768
+        maxTokens: 128000
     },
-    o4mini: {
-        model: "o4-mini",
-        name: "o4-mini",
+    gpt6luna: {
+        model: "gpt-6-luna",
+        name: "GPT-6 Luna",
         provider: ModelProvider.OpenAI,
-        maxTokens: 100000
+        maxTokens: 128000
     },
-    o3: {
-        model: "o3",
-        name: "o3",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 100000
-    },
-    o3pro: {
-        model: "o3-pro",
-        name: "o3-pro",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 100000
-    },
-    o3mini: {
-        model: "o3-mini",
-        name: "o3-mini",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 100000
-    },
-    o1: {
-        model: "o1",
-        name: "o1",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 100000
-    },
-    o1pro: {
-        model: "o1-pro",
-        name: "o1-pro",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 100000
-    },
-    chatgpt4o: {
-        model: "chatgpt-4o-latest",
-        name: "ChatGPT 4o",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 16384
-    },
-    gpt4o: {
-        model: "gpt-4o",
-        name: "GPT-4o",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 16384
-    },
-    gpt4omini: {
-        model: "gpt-4o-mini",
-        name: "GPT-4o mini",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 16384
-    },
-    gpt4turbo: {
-        model: "gpt-4-turbo",
-        name: "GPT-4 Turbo",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 4096
-    },
-    gpt4: {
-        model: "gpt-4",
-        name: "GPT-4",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 8192
-    },
-    gpt35: {
-        model: "gpt-3.5-turbo",
-        name: "GPT-3.5 Turbo",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 4096
-    },
-    claude4opus: {
-        model: "claude-opus-4-0",
-        name: "Claude Opus 4",
+    claudeopus55: {
+        model: "claude-opus-5-5",
+        name: "Claude Opus 5.5",
         provider: ModelProvider.Anthropic,
-        maxTokens: 32000
+        maxTokens: 128000
     },
-    claude4sonnet: {
-        model: "claude-sonnet-4-0",
-        name: "Claude Sonnet 4",
+    claudesonnet55: {
+        model: "claude-sonnet-5-5",
+        name: "Claude Sonnet 5.5",
         provider: ModelProvider.Anthropic,
-        maxTokens: 64000
+        maxTokens: 128000
     },
-    claude37sonnet: {
-        model: "claude-3-7-sonnet-latest",
-        name: "Claude Sonnet 3.7",
+    claudehaiku55: {
+        model: "claude-haiku-5-5",
+        name: "Claude Haiku 5.5",
         provider: ModelProvider.Anthropic,
-        maxTokens: 64000
+        maxTokens: 128000
     },
-    claude35sonnet: {
-        model: "claude-3-5-sonnet-latest",
-        name: "Claude Sonnet 3.5",
+    claudefable51: {
+        model: "claude-fable-5-1",
+        name: "Claude Fable 5.1",
         provider: ModelProvider.Anthropic,
-        maxTokens: 8192
-    },
-    claude3opus: {
-        model: "claude-3-opus-latest",
-        name: "Claude Opus 3",
-        provider: ModelProvider.Anthropic
-    },
-    claude35haiku: {
-        model: "claude-3-5-haiku-latest",
-        name: "Claude Haiku 3.5",
-        provider: ModelProvider.Anthropic,
-        maxTokens: 8192
+        maxTokens: 128000
     },
     azureGpt4o: {
         model: "gpt-4o",
         name: "GPT-4o",
         provider: ModelProvider.Azure
     },
-    llama33_70b_specdec: {
-        model: "llama-3.3-70b-specdec",
-        name: "Llama 3.3 70B Specdec (Groq)",
+    gptoss120b: {
+        model: "openai/gpt-oss-120b",
+        name: "GPT-OSS 120B (Groq)",
         provider: ModelProvider.Groq,
-        maxTokens: 8192
+        maxTokens: 65536
     },
-    llama33_70b_versatile: {
-        model: "llama-3.3-70b-versatile",
-        name: "Llama 3.3 70B Versatile (Groq)",
+    gptoss20b: {
+        model: "openai/gpt-oss-20b",
+        name: "GPT-OSS 20B (Groq)",
         provider: ModelProvider.Groq,
-        maxTokens: 32768
+        maxTokens: 65536
     },
-    llama32_90b_vision: {
-        model: "llama-3.2-90b-vision-preview",
-        name: "Llama 3.2 90B Vision (Groq)",
+    qwen38_27b: {
+        model: "qwen/qwen3.8-27b",
+        name: "Qwen 3.8 27B (Groq)",
         provider: ModelProvider.Groq,
-        maxTokens: 8192
-    },
-    llama32_11b_vision: {
-        model: "llama-3.2-90b-vision-preview",
-        name: "Llama 3.2 11B Vision (Groq)",
-        provider: ModelProvider.Groq,
-        maxTokens: 8192
-    },
-    llama31_8b: {
-        model: "llama-3.1-8b-instant",
-        name: "Llama 3.1 8B (Groq)",
-        provider: ModelProvider.Groq,
-        maxTokens: 8000
-    },
-    mixtral_8x7b: {
-        model: "mixtral-8x7b-32768",
-        name: "Mixtral 8x7B (Groq)",
-        provider: ModelProvider.Groq,
-        maxTokens: 32768
-    },
-    gemma2_9b_it: {
-        model: "gemma2-9b-it",
-        name: "Gemma2 9B (Groq)",
-        provider: ModelProvider.Groq,
-        maxTokens: 8192
-    },
-    deepseek_r1_distill_llama_70b: {
-        model: "deepseek-r1-distill-llama-70b",
-        name: "Deepseek R1 Distill Llama 70B (Groq)",
-        provider: ModelProvider.Groq,
-        maxTokens: 131072
-    },
-
-    // Latest Models
-    gptLatest: {
-        model: "gpt-4o",
-        name: "GPT-4o",
-        provider: ModelProvider.OpenAI,
         maxTokens: 16384
     },
+    gptLatest: {
+        model: "gpt-6.1-sol",
+        name: "GPT-6.1 Sol",
+        provider: ModelProvider.OpenAI,
+        maxTokens: 128000
+    },
     claudeLatest: {
-        model: "claude-sonnet-4-0",
-        name: "Claude Sonnet 4",
+        model: "claude-sonnet-5-5",
+        name: "Claude Sonnet 5.5",
         provider: ModelProvider.Anthropic,
-        maxTokens: 64000
+        maxTokens: 128000
     },
     azureLatest: {
         model: "gpt-4o",
@@ -321,7 +188,7 @@ export const models: { [key in ModelKey]: ModelConfig } = {
 
     // Fine-tuned Models
     mathgpt: {
-        model: process.env.MATHGPT_MODEL || "gpt-4o-mini",
+        model: process.env.MATHGPT_MODEL || "gpt-6-luna",
         name: "MathGPT",
         provider: ModelProvider.OpenAI,
         maxTokens: 16384
@@ -345,27 +212,16 @@ export const getModel = (modelConfig: ModelConfig) => {
     let baseModel;
     switch (modelConfig.provider) {
         case ModelProvider.OpenAI:
-            if (isReasoningModel(modelConfig.model as ModelKey)) {
-                baseModel = openai(modelConfig.model, {
-                    structuredOutputs: false
-                });
-            } else {
-                baseModel = openai(modelConfig.model);
-            }
+            baseModel = openai(modelConfig.model);
             break;
         case ModelProvider.Anthropic:
-            baseModel = anthropic(modelConfig.model, { cacheControl: true });
+            baseModel = anthropic(modelConfig.model);
             break;
         case ModelProvider.Azure:
-            baseModel = azure(modelConfig.model);
+            baseModel = azure.chat(modelConfig.model);
             break;
         case ModelProvider.Groq:
-            if (modelConfig.model.toLowerCase().includes("deepseek")) {
-                return wrapLanguageModel({
-                    model: groq(modelConfig.model),
-                    middleware: extractReasoningMiddleware({ tagName: "think" })
-                });
-            }
+            // Groq returns reasoning as a separate field (parsed format by default)
             baseModel = groq(modelConfig.model);
             break;
         case ModelProvider.Custom:
@@ -382,30 +238,19 @@ export const getModel = (modelConfig: ModelConfig) => {
     });
 };
 
-export const unsupportedToolUseModels: Partial<ModelKey>[] = [
-    "llama33_70b_specdec",
-    "llama31_8b",
-    "mixtral_8x7b",
-    "chatgpt4o",
-    "o1",
-    "o1pro",
-    "o3",
-    "o3mini",
-    "o3pro",
-    "o4mini"
-];
-export const unsupportedArtifactUseModels = ["mixtral_8x7b"];
+export const unsupportedToolUseModels: Partial<ModelKey>[] = [];
+export const unsupportedArtifactUseModels: Partial<ModelKey>[] = [];
 
-// Models that support reasoning/thinking output
+// Models that support reasoning/thinking output. These are called without a temperature.
 export const reasoningModels: Partial<ModelKey>[] = [
-    "o1",
-    "o1pro",
-    "o3",
-    "o3mini",
-    "o3pro",
-    "o4mini",
+    "gpt6astra",
+    "gpt61sol",
+    "gpt61terra",
+    "gpt6luna",
     "reasoning",
-    "deepseek_r1_distill_llama_70b"
+    "gptoss120b",
+    "gptoss20b",
+    "qwen38_27b"
 ];
 
 export const isReasoningModel = (modelKey: ModelKey): boolean => {

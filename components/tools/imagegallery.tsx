@@ -49,7 +49,7 @@ const ImageGallery = ({ images }: { images: any[] }) => {
                         <TooltipProvider key={index}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <div className="flex-shrink-0 max-h-32">
+                                    <div className="shrink-0 max-h-32">
                                         <Link
                                             key={index}
                                             href={image.hostPageUrl}

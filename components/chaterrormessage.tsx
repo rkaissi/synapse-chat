@@ -12,7 +12,7 @@ export const ChatErrorMessage = ({
 }: ChatErrorMessageProps) => {
     return (
         <div className="flex items-start gap-4">
-            <Avatar className="w-9 h-9 border flex-shrink-0">
+            <Avatar className="w-9 h-9 border shrink-0">
                 <AvatarImage src="/placeholder-user.jpg" />
                 <AvatarFallback>OA</AvatarFallback>
             </Avatar>
@@ -24,7 +24,7 @@ export const ChatErrorMessage = ({
                 </div>
                 <div className="mt-2 p-3 rounded-md border border-red-200 bg-red-50">
                     <div className="flex items-start gap-2">
-                        <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
                         <div className="flex-1">
                             <div className="text-md font-medium mb-1 text-red-700">
                                 An error occurred

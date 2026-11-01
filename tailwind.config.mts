@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
     content: [
@@ -310,10 +311,6 @@ const config: Config = {
             "accordion-up": "accordion-up 0.2s ease-out"
         }
     },
-    plugins: [
-        require("tailwindcss-animate"),
-        require("@tailwindcss/typography"),
-        require("tailwind-scrollbar-hide")
-    ]
+    plugins: [typography]
 };
 export default config;

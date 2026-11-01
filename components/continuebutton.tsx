@@ -1,23 +1,21 @@
 import { Button } from "@/components/ui";
-import { ChatRequestOptions, CreateMessage, generateId, Message } from "ai";
+import { NewMessage } from "@/lib/types";
 import { FastForwardIcon } from "lucide-react";
 
 interface Props {
     show: boolean;
     onHide: () => void;
-    appendMessage: (
-        message: Message | CreateMessage,
-        chatRequestOptions?: ChatRequestOptions | undefined
-    ) => Promise<string | null | undefined>;
+    appendMessage: (message: NewMessage) => void;
 }
 
 const ContinueButton = ({ show, onHide, appendMessage }: Props) => {
     if (!show) return null;
 
     const handleContinueResponse = () => {
+        // AI SDK 7 rejects system messages in the message history,
+        // so the continuation request is sent as a user message
         appendMessage({
-            id: generateId(),
-            role: "system",
+            role: "user",
             content: "Continue Response"
         });
         onHide();

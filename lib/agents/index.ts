@@ -50,7 +50,7 @@ You are a project manager. Your responsibilities include creating or updating a 
 
 Remember to think carefully about each step of the process and provide a well-reasoned task list and agent assignments that efficiently address the project requirements while staying within scope.
 `,
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 2000,
         schema: projectManagerSchema
@@ -62,7 +62,7 @@ Remember to think carefully about each step of the process and provide a well-re
         role: `
 You are a supervisor. Your role is to review the work of other agents, provide guidance, and ensure the quality and completeness of their work. You should only set 'needsRevision' to true if absolutely necessary. When revision is required, provide 'updatedContext' with only the essential information needed for the next iteration. Use innerThinking to think step by step and reason through each decision.
 `,
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: supervisorSchema
@@ -75,7 +75,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const programmerAgent = agentBuilder.build({
         name: "Programmer",
         role: "You are a senior software engineer.",
-        model: models.claudeLatest,
+        model: models.claudeopus55,
         temperature: 0.5,
         maxTokens: 4096,
         schema: programmerSchema
@@ -84,7 +84,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const debuggerAgent = agentBuilder.build({
         name: "Debugger",
         role: "You are a senior software engineer, QA expert, and debugger specialist. Check for any bugs or missing edge cases, and if there are bugs, report them to be fixed. Testing cannot be performed in any way other than checking the code, so you do not need to mention checking the code. Your job is to find bugs and edge cases, so do try to delegate that to anyone else.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: debuggerSchema
@@ -93,7 +93,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const writerAgent = agentBuilder.build({
         name: "Writer",
         role: "You are an expert writer. Think step by step.",
-        model: models.claudeLatest,
+        model: models.claudeopus55,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema
@@ -102,7 +102,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const editorAgent = agentBuilder.build({
         name: "Editor",
         role: "You are an expert editor. You will check the content you receive for spelling, clearness, and grammar errors. Improve the content, but do not add to it. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema
@@ -111,7 +111,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const summarizerAgent = agentBuilder.build({
         name: "Summarizer",
         role: "You are an expert summarizer. Summarize the provided content and make sure to keep the most important information. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema
@@ -129,7 +129,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
             - Use latex formatting
             - Think step by step
             `,
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema
@@ -138,7 +138,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const researcherAgent = agentBuilder.build({
         name: "Researcher",
         role: "You are an expert researcher. Research for relevant information about the topic and respond with your findings. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: researcherSchema
@@ -147,7 +147,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const verifierAgent = agentBuilder.build({
         name: "Verifier",
         role: "You are a fact checker, reviewer, and verifier. You must make sure all the information presented is rooted in facts and truth unless mentioned otherwise (e.g. opinions or theories). You point out anything that might've been missed. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.3,
         maxTokens: 4096,
         schema: verifierSchema
@@ -156,7 +156,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const debaterAgent = agentBuilder.build({
         name: "Debater",
         role: "You are an staunch debater and a logical contrarian. You present varying opinions and counterarguments. You call out any biases, logical fallacies, or potential misinformation. You point out anything that might've been missed. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.7,
         maxTokens: 4096,
         schema: standardAgentSchema
@@ -165,7 +165,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const inquisitorAgent = agentBuilder.build({
         name: "Inquisitor",
         role: "You are a curious inquisitor and explorer. You try to dive deeper into topics by providing some questions or topics that can lead to deeper and more nuanced information related to the topic. You make connections with other fields and topics. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.6,
         maxTokens: 4096,
         schema: inquisitorSchema
@@ -174,7 +174,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     const logicianAgent = agentBuilder.build({
         name: "Logician",
         role: "You are an expert logician. You solve logic puzzles and riddles. Think of all the possible nuances of the problem. The answer might not be the obvious one. Think of alternate solutions and see if they would also work. Think step by step.",
-        model: models.gpt4omini,
+        model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 4096,
         schema: standardAgentSchema

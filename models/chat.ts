@@ -37,5 +37,8 @@ const chatSchema: Schema = new Schema(
     { timestamps: true }
 );
 
+// Serves the chat history query in /api/chats
+chatSchema.index({ userId: 1, updatedAt: -1 });
+
 const Chat = mongoose.models.Chat || mongoose.model("Chat", chatSchema);
 export default Chat;

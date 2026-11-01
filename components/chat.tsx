@@ -10,7 +10,14 @@ import React, {
 } from "react";
 import { Messages } from "./messages";
 import { useChat } from "@ai-sdk/react";
-import { Action, Artifact, CombinedMessage, Data, Settings } from "@/lib/types";
+import {
+    Action,
+    Artifact,
+    ChatUIMessage,
+    CombinedMessage,
+    NewMessage,
+    Settings
+} from "@/lib/types";
 import { ModelKey } from "@/lib/utils/model-provider";
 import ChatHeader from "./chatheader";
 import ChatFooter from "./chatfooter";
@@ -27,8 +34,7 @@ import {
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOOL_CHOICE,
-    DEFAULT_TOPP,
-    maxSteps
+    DEFAULT_TOPP
 } from "@/app/api/chat/config";
 import ContinueButton from "./continuebutton";
 import dynamic from "next/dynamic";
@@ -36,13 +42,22 @@ import DefaultPromptsSkeleton from "./defaultpromptsskeleton";
 import { ArtifactsWindow } from "./artifactswindow";
 import saveChat from "@/lib/utils/save-chat";
 import markdownToHtml from "@/lib/utils/markdown-to-html";
-import { generateId, Message } from "ai";
+import { DefaultChatTransport } from "ai";
 import { usePathname } from "next/navigation";
 import { SidebarContainer } from "./sidebar";
 import GitHubRepoSelector from "./githubreposelector";
 import toast from "react-hot-toast";
 import { ChatErrorMessage } from "./chaterrormessage";
 import { extractArtifacts } from "@/app/api/chat/artifact-middleware";
+import {
+    getAttachments,
+    getMessageReasoning,
+    getMessageText,
+    getToolInvocations,
+    toUIMessage
+} from "@/lib/utils/ui-messages";
+
+const transport = new DefaultChatTransport<ChatUIMessage>({ api: "/api/chat" });
 
 const DefaultPrompts = dynamic(() => import("./defaultprompts"), {
     loading: () => <DefaultPromptsSkeleton />,
@@ -111,8 +126,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const isStreamingArtifactRef = useRef(false);
-    const lastProcessedMessageRef = useRef<string | null>(null);
-    const lastDataIndexRef = useRef<number | undefined>(undefined);
+    const lastProcessedMessageRef = useRef<ChatUIMessage | null>(null);
     const shouldLoadChatRef = useRef(false);
     const shouldSaveRef = useRef(false);
     const combinedMessagesRef = useRef<CombinedMessage[]>([]);
@@ -132,42 +146,49 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    const {
-        messages,
-        setMessages,
-        input,
-        append,
-        handleInputChange,
-        handleSubmit,
-        isLoading,
-        error,
-        stop,
-        reload,
-        data
-    } = useChat({
-        body: {
-            userId,
-            settings: state
-        },
-        onResponse: (response: Response) => {
-            shouldSaveRef.current = true;
-            console.log("Received response from server:", response);
-        },
-        onFinish: (message) => {
-            shouldSaveRef.current = true;
-            save();
-            console.log("Chat finished:", message);
-        },
-        onError: (error) => {
-            shouldSaveRef.current = true;
-            console.error("Chat error:", error.message);
-        },
-        maxSteps,
-        keepLastMessageOnError: true,
+    const [input, setInput] = useState("");
 
-        // run client-side tools that are automatically executed:
-        async onToolCall({ toolCall }) {}
-    });
+    const { messages, setMessages, sendMessage, status, error, stop, regenerate } =
+        useChat<ChatUIMessage>({
+            transport,
+            // Also called after stop() and errors. The save happens once the
+            // status settles and the final message has been processed (see below)
+            onFinish: ({ message }) => {
+                shouldSaveRef.current = true;
+                console.log("Chat finished:", message);
+            },
+            onError: (error) => {
+                shouldSaveRef.current = true;
+                console.error("Chat error:", error.message);
+            }
+        });
+
+    const isLoading = status === "submitted" || status === "streaming";
+
+    const requestOptions = { body: { userId, settings: state } };
+
+    const addMessage = (message: NewMessage) => {
+        shouldSaveRef.current = true;
+        sendMessage({ text: message.content }, requestOptions);
+    };
+
+    const handleSubmit = (
+        event: React.FormEvent<HTMLFormElement>,
+        files?: FileList
+    ) => {
+        event.preventDefault();
+        if (!input.trim() && (!files || files.length === 0)) {
+            return;
+        }
+        shouldSaveRef.current = true;
+        sendMessage({ text: input, files }, requestOptions);
+        setInput("");
+    };
+
+    const reload = useCallback(() => {
+        shouldSaveRef.current = true;
+        regenerate({ body: { userId, settings: state } });
+    }, [regenerate, userId, state]);
 
     useEffect(() => {
         if (!path.includes("chat") && messages.length === 1) {
@@ -191,15 +212,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
                         const chatData = await response.json();
                         const newCombinedMessages = chatData.messages.slice();
-                        const newMessages = newCombinedMessages.map(
-                            (message: CombinedMessage) => ({
-                                id: message.id,
-                                role: message.role,
-                                content: message.originalContent,
-                                toolInvocations: message.toolInvocations
-                            })
-                        ) as Message[];
-                        setMessages(newMessages);
+                        setMessages(newCombinedMessages.map(toUIMessage));
                         setCombinedMessages(newCombinedMessages);
                         setArtifacts(
                             newCombinedMessages
@@ -321,8 +334,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
             if (!latestMessage) return;
 
+            const latestContent = getMessageText(latestMessage);
+            const toolInvocations = getToolInvocations(latestMessage);
+
             const { cleanedContent, artifact, model } = processMessage(
-                latestMessage.content,
+                latestContent,
                 combinedMessages[latestMessageIndex]?.model
             );
 
@@ -332,20 +348,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                 totalTokens,
                 cacheWriteTokens,
                 cacheReadTokens,
-                finishReason,
-                reasoning
-            } =
-                data && data.length > 0
-                    ? (data[data?.length - 1] as Data)
-                    : {
-                          promptTokens: undefined,
-                          completionTokens: undefined,
-                          totalTokens: undefined,
-                          cacheWriteTokens: undefined,
-                          cacheReadTokens: undefined,
-                          finishReason: undefined,
-                          reasoning: undefined
-                      };
+                finishReason
+            } = latestMessage.metadata ?? {};
+            const reasoning = getMessageReasoning(latestMessage) || undefined;
 
             setShowContinueButton(
                 finishReason === "length" && latestMessage.role === "assistant"
@@ -365,11 +370,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     newCombinedMessages[regeneratedIndex] = {
                         ...newCombinedMessages[regeneratedIndex],
                         id: latestMessage.id, // Update with the new message ID
-                        originalContent: latestMessage.content,
+                        originalContent: latestContent,
                         processedContent: cleanedContent,
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
+                        toolInvocations,
                         promptTokens,
                         completionTokens,
                         totalTokens,
@@ -398,11 +403,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     // Update existing message
                     newCombinedMessages[existingMessageIndex] = {
                         ...newCombinedMessages[existingMessageIndex],
-                        originalContent: latestMessage.content,
+                        originalContent: latestContent,
                         processedContent: cleanedContent,
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
+                        toolInvocations,
                         promptTokens,
                         completionTokens,
                         totalTokens,
@@ -424,12 +429,12 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     newCombinedMessages.push({
                         id: latestMessage.id,
                         role: latestMessage.role,
-                        originalContent: latestMessage.content,
+                        originalContent: latestContent,
                         processedContent: cleanedContent || "",
-                        attachments: latestMessage.experimental_attachments,
+                        attachments: getAttachments(latestMessage),
                         artifact: artifact || undefined,
                         model,
-                        toolInvocations: latestMessage.toolInvocations,
+                        toolInvocations,
                         promptTokens,
                         completionTokens,
                         totalTokens,
@@ -449,6 +454,8 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             }
 
             setCombinedMessages(newCombinedMessages);
+            // Keep the ref current so a save in this pass includes this update
+            combinedMessagesRef.current = newCombinedMessages;
 
             if (shouldSaveRef.current) {
                 console.log("COMBINED MESSAGE SHOULD SAVE...");
@@ -459,15 +466,11 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         const latestMessageIndex = messages.length - 1;
         const latestMessage = messages[latestMessageIndex];
 
-        if (
-            (latestMessage &&
-                latestMessage.content !== lastProcessedMessageRef.current) ||
-            (data && lastDataIndexRef.current != data.length)
-        ) {
+        // useChat replaces the message object whenever its parts or metadata change
+        if (latestMessage && latestMessage !== lastProcessedMessageRef.current) {
             processMessages();
 
-            lastProcessedMessageRef.current = latestMessage.content;
-            lastDataIndexRef.current = data?.length;
+            lastProcessedMessageRef.current = latestMessage;
 
             console.log("MESSAGES: ", combinedMessages);
         }
@@ -477,9 +480,14 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         processMessage,
         combinedMessages,
         regeneratingMessageId,
-        data,
         save
     ]);
+
+    useEffect(() => {
+        if ((status === "ready" || status === "error") && shouldSaveRef.current) {
+            save();
+        }
+    }, [status, save]);
 
     // Modify the reload function to set the regeneratingMessageId
     const handleReload = useCallback(() => {
@@ -489,7 +497,6 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         if (lastAssistantMessage) {
             setRegeneratingMessageId(lastAssistantMessage.id);
         }
-        shouldSaveRef.current = true;
         reload();
     }, [combinedMessages, reload]);
 
@@ -541,8 +548,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             const context = await response.json();
             setRepoContext(context);
             // Add repository context to the chat
-            append({
-                id: generateId(),
+            addMessage({
                 role: "user",
                 content:
                     `Repository context loaded from ${repoUrl}. The assistant now have access to the repository structure and contents. The assistant can reference this information when answering questions about the codebase.\n\n` +
@@ -579,7 +585,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                     settings={state}
                     dispatch={dispatch}
                 />
-                <div className="flex flex-grow overflow-hidden">
+                <div className="flex grow overflow-hidden">
                     <div
                         className={`flex flex-col ${
                             isArtifactsOpen ? "w-[55%]" : "w-full"
@@ -603,18 +609,18 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                         <GitHubRepoSelector onRepoSelect={handleRepoSelect} />
                         <div
                             ref={messagesContainerRef}
-                            className="flex-grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
+                            className="grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
                         >
-                            <div className="flex-shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
+                            <div className="shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
                                 {combinedMessages.length === 0 &&
                                 !path.includes("chat") ? (
-                                    <DefaultPrompts addMessage={append} />
+                                    <DefaultPrompts addMessage={addMessage} />
                                 ) : (
                                     <Messages
                                         messages={combinedMessages}
                                         onArtifactClick={openArtifact}
                                         onRegenerate={handleReload}
-                                        addMessage={append}
+                                        addMessage={addMessage}
                                     />
                                 )}
                                 {error && (
@@ -629,11 +635,13 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                         <ContinueButton
                             show={showContinueButton}
                             onHide={() => setShowContinueButton(false)}
-                            appendMessage={append}
+                            appendMessage={addMessage}
                         />
                         <ChatFooter
                             input={input}
-                            handleInputChange={handleInputChange}
+                            handleInputChange={(event) =>
+                                setInput(event.target.value)
+                            }
                             handleSubmit={handleSubmit}
                             isLoading={isLoading}
                             handleStop={() => {

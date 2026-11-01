@@ -50,7 +50,7 @@ const AttachmentModal = ({ isOpen, onClose, file, fallback, image }: Props) => {
                         {file?.name || (isImage ? src : "File")}
                     </span>
                 </DialogDescription>
-                <div className="flex-grow overflow-auto">
+                <div className="grow overflow-auto">
                     {isImage ? (
                         <Image
                             src={src || ""}

@@ -45,7 +45,7 @@ const AttachmentPreview = ({ attachments }: AttachmentPreviewProps) => {
                         className="flex items-center max-w-80 p-2 pr-4 bg-white border border-input rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => handleAttachmentClick(attachment)}
                     >
-                        <div className="flex-shrink-0 w-10 h-10 mr-3">
+                        <div className="shrink-0 w-10 h-10 mr-3">
                             {attachment.contentType.startsWith("image/") ? (
                                 <div className="relative w-full h-full rounded-md overflow-hidden">
                                     <Image
@@ -61,7 +61,7 @@ const AttachmentPreview = ({ attachments }: AttachmentPreviewProps) => {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-grow min-w-0 overflow-hidden">
+                        <div className="grow min-w-0 overflow-hidden">
                             <p className="text-sm font-medium text-gray-900 truncate">
                                 {attachment.name}
                             </p>

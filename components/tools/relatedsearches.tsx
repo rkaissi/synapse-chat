@@ -1,4 +1,4 @@
-import { generateId, Message } from "ai";
+import { NewMessage } from "@/lib/types";
 import { useState } from "react";
 import {
     Tooltip,
@@ -17,7 +17,7 @@ import { Button, Card } from "@/components/ui";
 
 interface RelatedSearchesProps {
     searches: Array<{ displayText: string; webSearchUrl: string }>;
-    addMessage: (message: Message) => void;
+    addMessage: (message: NewMessage) => void;
 }
 
 const RelatedSearches: React.FC<RelatedSearchesProps> = ({
@@ -39,15 +39,14 @@ const RelatedSearches: React.FC<RelatedSearchesProps> = ({
                                     className="hover:shadow-md transition-shadow duration-200 cursor-pointer group"
                                     onClick={() =>
                                         addMessage({
-                                            id: generateId(),
                                             role: "user",
                                             content: search.displayText
                                         })
                                     }
                                 >
                                     <div className="p-3 flex items-center justify-between">
-                                        <div className="flex items-center flex-grow overflow-hidden">
-                                            <SearchIcon className="w-4 h-4 mr-2 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+                                        <div className="flex items-center grow overflow-hidden">
+                                            <SearchIcon className="w-4 h-4 mr-2 shrink-0 text-gray-500 group-hover:text-gray-700" />
                                             <span className="text-sm truncate">
                                                 {search.displayText}
                                             </span>

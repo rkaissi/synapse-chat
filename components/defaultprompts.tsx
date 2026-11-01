@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
     PaperAirplaneIcon,
     LightBulbIcon,
@@ -28,7 +28,7 @@ import {
     // WrenchScrewdriverIcon
 } from "@heroicons/react/24/outline";
 
-import { generateId, Message } from "ai";
+import { NewMessage } from "@/lib/types";
 
 interface Prompt {
     icon: React.ElementType;
@@ -206,16 +206,13 @@ Create a Polaroid photo with VSCO filter, 1990, a gorgeous woman, at night, flas
 */
 
 interface Props {
-    addMessage: (message: Message) => void;
+    addMessage: (message: NewMessage) => void;
 }
 
 const DefaultPrompts = ({ addMessage }: Props) => {
-    const [randomPrompts, setRandomPrompts] = useState<Prompt[]>([]);
-
-    useEffect(() => {
-        const shuffled = [...prompts].sort(() => 0.5 - Math.random());
-        setRandomPrompts(shuffled.slice(0, 4));
-    }, []);
+    const [randomPrompts] = useState<Prompt[]>(() =>
+        [...prompts].sort(() => 0.5 - Math.random()).slice(0, 4)
+    );
 
     if (randomPrompts.length === 0) {
         return null;
@@ -234,7 +231,6 @@ const DefaultPrompts = ({ addMessage }: Props) => {
                             className="flex flex-col items-center justify-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 text-center h-full"
                             onClick={() =>
                                 addMessage({
-                                    id: generateId(),
                                     role: "user",
                                     content: item.prompt
                                 })

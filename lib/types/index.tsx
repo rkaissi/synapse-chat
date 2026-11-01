@@ -1,5 +1,5 @@
 import { ModelKey } from "@/lib/utils/model-provider";
-import { ToolInvocation } from "ai";
+import { UIMessage } from "ai";
 
 export interface Artifact {
     identifier: string;
@@ -28,6 +28,33 @@ export interface Data {
     reasoning?: string;
 }
 
+// Legacy (AI SDK v4) tool invocation shape. Chats are persisted in this format and
+// the tool cards read from it, so UI message tool parts are mapped back to it.
+export interface ToolInvocation {
+    state: "partial-call" | "call" | "result";
+    toolCallId: string;
+    toolName: string;
+    args: any;
+    result?: any;
+}
+
+export interface Attachment {
+    name: string;
+    contentType: string;
+    url: string;
+}
+
+// Per-message metadata streamed from /api/chat
+export type ChatMetadata = Omit<Data, "chatId" | "reasoning">;
+
+export type ChatUIMessage = UIMessage<ChatMetadata>;
+
+export type NewMessage = {
+    id?: string;
+    role: "user";
+    content: string;
+};
+
 export type Role =
     | "user"
     | "assistant"
@@ -43,6 +70,7 @@ export type FinishReason =
     | "tool-calls"
     | "error"
     | "other"
+    | "interrupted"
     | "unknown";
 
 export type CombinedMessage = {
@@ -50,7 +78,7 @@ export type CombinedMessage = {
     role: Role;
     originalContent: string;
     processedContent: string;
-    attachments: any;
+    attachments?: Attachment[];
     artifact?: Artifact;
     model?: ModelKey;
     toolInvocations?: ToolInvocation[];

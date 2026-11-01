@@ -1,6 +1,6 @@
 import { Settings } from "@/lib/types";
 
-export const DEFAULT_MODEL = "gpt4omini";
+export const DEFAULT_MODEL = "gpt6luna";
 export const DEFAULT_TEMPERATURE = 0.5;
 export const DEFAULT_TOPP = 1;
 export const DEFAULT_MAX_TOKENS = 4096;

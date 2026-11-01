@@ -71,32 +71,15 @@ const PreviewComponent = ({
                 />
             );
         case "application/react":
-            try {
-                return (
-                    <ReactRenderer
-                        code={artifact.content || ""}
-                        setConsoleLogs={setConsoleLogs}
-                    />
-                );
-            } catch (error) {
-                return (
-                    <ErrorMessage
-                        title="React Component Error"
-                        message="An error occurred while trying to display the React component. Please check the component code for any issues."
-                    />
-                );
-            }
+            // ReactRenderer and Mermaid report their own errors
+            return (
+                <ReactRenderer
+                    code={artifact.content || ""}
+                    setConsoleLogs={setConsoleLogs}
+                />
+            );
         case "application/mermaid":
-            try {
-                return <Mermaid chart={artifact.content || ""} />;
-            } catch (error) {
-                return (
-                    <ErrorMessage
-                        title="Diagram Error"
-                        message="An error occurred while trying to display the Mermaid diagram. Please verify the diagram syntax."
-                    />
-                );
-            }
+            return <Mermaid chart={artifact.content || ""} />;
         case "text/markdown":
             return (
                 <CustomMarkdown

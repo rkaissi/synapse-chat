@@ -64,7 +64,7 @@ interface Props {
 }
 
 const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
-    const [maxPossibleOutput, setMaxPossibleOutput] = useState(4096);
+    const maxPossibleOutput = models[settings.model].maxTokens || 4096;
     const [toolChoice, setToolChoice] = useState<ToolChoice>("auto");
     const [openCombobox, setOpenCombobox] = useState(false);
     const [selectedTool, setSelectedTool] = useState<string>(
@@ -74,13 +74,11 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
     );
 
     useEffect(() => {
-        const newMaxPossibleOutput = models[settings.model].maxTokens || 4096;
-        setMaxPossibleOutput(newMaxPossibleOutput);
         dispatch({
             type: "SET_MAX_TOKENS",
-            payload: Math.min(settings.maxTokens, newMaxPossibleOutput)
+            payload: Math.min(settings.maxTokens, maxPossibleOutput)
         });
-    }, [settings.model, settings.maxTokens, dispatch]);
+    }, [maxPossibleOutput, settings.maxTokens, dispatch]);
 
     const handleSetMaxTokens = (value: number) => {
         dispatch({
@@ -614,7 +612,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                             : "focus:border-primary focus-within:border-primary"
                                     }`}
                                 >
-                                    <div className="absolute inset-x-0 bottom-0 h-[1px] bg-transparent transition-all duration-200 group-focus-within:h-[3px] group-focus:h-[3px]">
+                                    <div className="absolute inset-x-0 bottom-0 h-px bg-transparent transition-all duration-200 group-focus-within:h-[3px] group-focus:h-[3px]">
                                         <div
                                             className={`absolute inset-0 ${
                                                 settings.customInstructions
@@ -640,7 +638,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                         }
                                         rows={4}
                                         placeholder="Enter your custom instructions"
-                                        className="resize-none focus:border-none border-none outline-none w-full h-full p-2"
+                                        className="resize-none focus:border-none border-none outline-hidden w-full h-full p-2"
                                     />
                                     <div className="flex justify-end pr-1 pb-1 w-full">
                                         <span className="text-sm text-muted-foreground">

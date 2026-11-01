@@ -1,13 +1,15 @@
 import {
-    convertToCoreMessages,
-    CoreMessage,
-    createDataStreamResponse,
+    convertToModelMessages,
+    createUIMessageStreamResponse,
+    isStepCount,
     smoothStream,
     streamText,
+    toUIMessageStream,
     wrapLanguageModel
 } from "ai";
 import {
     getModel,
+    isReasoningModel,
     ModelKey,
     models,
     unsupportedArtifactUseModels,
@@ -22,8 +24,9 @@ import {
     maxSteps,
     toolsPrompt
 } from "./config";
-import { ToolChoice } from "@/lib/types";
+import { ChatMetadata, ChatUIMessage, Settings, ToolChoice } from "@/lib/types";
 import { limitMessages } from "@/lib/utils/message-manager";
+import { getMessageText, inlineTextFileParts } from "@/lib/utils/ui-messages";
 import { findRelevantMemories, extractMemory } from "@/lib/memory";
 
 export const maxDuration = 100; // Timeout in seconds
@@ -33,16 +36,22 @@ const shouldUseAdvancedModel = (message: string): boolean =>
         category.some((keyword) => message.toLowerCase().includes(keyword))
     );
 
-const determineModel = (model: ModelKey, messages: any[]): ModelKey => {
+const determineModel = (
+    model: ModelKey,
+    messages: ChatUIMessage[]
+): ModelKey => {
     const lastMessage =
-        messages.reverse().find((message) => message.content)?.content ?? "";
+        messages
+            .map(getMessageText)
+            .reverse()
+            .find((content) => content) ?? "";
 
     if (model === "agents") {
-        return "gpt4omini";
+        return "gpt6luna";
     }
 
     if (model === "auto") {
-        return shouldUseAdvancedModel(lastMessage) ? "gpt4o" : "gpt4omini";
+        return shouldUseAdvancedModel(lastMessage) ? "gpt61sol" : "gpt6luna";
     }
 
     return model;
@@ -51,11 +60,11 @@ const determineModel = (model: ModelKey, messages: any[]): ModelKey => {
 const getToolsToUse = (
     toolChoice: ToolChoice,
     model: ModelKey,
-    messages: any[]
+    messages: ChatUIMessage[]
 ): { toolChoice: ToolChoice; tools: any } => {
-    const previousAssistantMessage =
-        messages.reverse().find((message: any) => message.role === "assistant")
-            ?.content ?? "";
+    const previousAssistantMessage = getMessageText(
+        messages.findLast((message) => message.role === "assistant")
+    );
     const agentsTool = createAgentsTool(previousAssistantMessage);
 
     if (toolChoice === "none" || unsupportedToolUseModels.includes(model)) {
@@ -77,7 +86,12 @@ const getToolsToUse = (
 };
 
 export async function POST(req: Request) {
-    const { userId, messages, settings } = await req.json();
+    const {
+        userId,
+        messages,
+        settings
+    }: { userId: string; messages: ChatUIMessage[]; settings: Settings } =
+        await req.json();
 
     const {
         model,
@@ -94,13 +108,13 @@ export async function POST(req: Request) {
         toolChoice
     } = settings;
 
-    const modelToUse = determineModel(model, messages?.slice());
+    const modelToUse = determineModel(model, messages);
     const useAgents = model === "agents";
 
     const { toolChoice: finalToolChoice, tools: toolsToUse } = getToolsToUse(
         toolChoice,
         model,
-        messages?.slice()
+        messages
     );
     const {
         temperature: finalTemperature,
@@ -108,15 +122,11 @@ export async function POST(req: Request) {
         maxTokens: finalMaxTokens
     } = useAgents ? DEFAULT_AGENT_SETTINGS : { temperature, topP, maxTokens };
 
-    const limitedMessages = (await limitMessages(
-        [...messages],
-        messageLimit
-    )) as any;
+    const limitedMessages = await limitMessages([...messages], messageLimit);
 
-    const userMessages = messages.filter(
-        (message: CoreMessage) => message.role === "user"
+    const lastUserMessage = getMessageText(
+        messages.findLast((message) => message.role === "user")
     );
-    const lastUserMessage = userMessages[userMessages.length - 1].content;
     const relevantMemories = enableMemory
         ? await findRelevantMemories(lastUserMessage, userId)
         : []; // This can be a tool as well
@@ -137,104 +147,64 @@ export async function POST(req: Request) {
         extractMemory(lastUserMessage, userId);
     }
 
-    const thinkingModels = ["o1", "o1pro", "o3", "o3mini", "o3pro", "o4mini"]
-    const role = thinkingModels.includes(modelToUse)
-        ? "user"
-        : "system";
-    const maxTokensKey = thinkingModels.includes(
-        modelToUse
-    )
-        ? "maxCompletionTokens"
-        : "maxTokens";
+    const isThinkingModel = isReasoningModel(modelToUse);
 
-    return createDataStreamResponse({
-        execute: async (dataStream) => {
-            let accumulatedReasoning = "";
+    const baseModel = getModel(models[modelToUse]);
 
-            const baseModel = getModel(models[modelToUse]);
-            
-            const shouldUseMiddleware = enableArtifacts && 
-                !unsupportedArtifactUseModels.includes(modelToUse)
-            
-            const model = shouldUseMiddleware
-                ? wrapLanguageModel({
-                    model: baseModel,
-                    middleware: artifactExtractionMiddleware
-                })
-                : baseModel;
+    const shouldUseMiddleware =
+        enableArtifacts && !unsupportedArtifactUseModels.includes(modelToUse);
 
-            const result = streamText({
-                model,
-                temperature: thinkingModels.includes(modelToUse) ? 1 : finalTemperature,
-                topP: finalTopP,
-                [maxTokensKey]: finalMaxTokens,
-                messages: [
-                    {
-                        role,
-                        content: system,
-                        experimental_providerMetadata: {
-                            anthropic: { cacheControl: { type: "ephemeral" } }
-                        }
-                    },
-                    ...convertToCoreMessages(limitedMessages)
-                ],
-                tools: toolsToUse,
-                toolChoice: finalToolChoice,
-                maxSteps,
-                experimental_continueSteps: true,
-                experimental_transform: smoothStream(),
-                // Use this for o1 and o3-mini
-                // providerOptions: {
-                //     openai: { reasoningEffort: "low" }
-                // },
-                onChunk: async ({ chunk }) => {
-                    if (chunk.type === "reasoning") {
-                        accumulatedReasoning += chunk.textDelta;
-                        dataStream.writeData({
-                            reasoning: accumulatedReasoning
-                        });
-                    }
-                },
-                onFinish: async (result) => {
-                    if (result.text) {
-                        const metadata = result.experimental_providerMetadata;
-
-                        const anthropicTokens = {
-                            cacheCreationInputTokens:
-                                metadata?.anthropic?.cacheCreationInputTokens ?? 0,
-                            cacheReadInputTokens:
-                                metadata?.anthropic?.cacheReadInputTokens ?? 0
-                        };
-
-                        const openaiTokens = {
-                            cachedPromptTokens:
-                                metadata?.openai?.cachedPromptTokens ?? 0
-                        };
-
-                        const cacheReadTokens =
-                            (anthropicTokens.cacheReadInputTokens as number) +
-                            (openaiTokens.cachedPromptTokens as number);
-                        const cacheWriteTokens =
-                            anthropicTokens.cacheCreationInputTokens;
-
-                        dataStream.writeData({
-                            completionTokens: result.usage.completionTokens,
-                            promptTokens: result.usage.promptTokens,
-                            totalTokens: result.usage.totalTokens,
-                            cacheWriteTokens,
-                            cacheReadTokens,
-                            finishReason: result.finishReason,
-                            reasoning: result.reasoning ?? ""
-                        });
-                    }
-                }
-            });
-
-            result.mergeIntoDataStream(dataStream);
+    const result = streamText({
+        model: shouldUseMiddleware
+            ? wrapLanguageModel({
+                  model: baseModel,
+                  middleware: artifactExtractionMiddleware
+              })
+            : baseModel,
+        // Reasoning models only support the default temperature
+        temperature: isThinkingModel ? undefined : finalTemperature,
+        topP: finalTopP,
+        maxOutputTokens: finalMaxTokens,
+        instructions: {
+            role: "system",
+            content: system,
+            providerOptions: {
+                anthropic: { cacheControl: { type: "ephemeral" } }
+            }
         },
-        onError: (error) => {
-            console.error(error);
-            return error instanceof Error ? error.message : String(error);
-        }
+        messages: await convertToModelMessages(
+            await inlineTextFileParts(limitedMessages),
+            { ignoreIncompleteToolCalls: true }
+        ),
+        tools: toolsToUse,
+        toolChoice: finalToolChoice,
+        stopWhen: isStepCount(maxSteps),
+        experimental_transform: smoothStream()
+    });
+
+    return createUIMessageStreamResponse({
+        stream: toUIMessageStream<any, ChatUIMessage>({
+            stream: result.stream,
+            sendReasoning: true,
+            messageMetadata: ({ part }): ChatMetadata | undefined => {
+                if (part.type !== "finish") {
+                    return undefined;
+                }
+
+                const usage = part.totalUsage;
+                return {
+                    promptTokens: usage.inputTokens,
+                    completionTokens: usage.outputTokens,
+                    totalTokens: usage.totalTokens,
+                    cacheReadTokens: usage.inputTokenDetails.cacheReadTokens,
+                    cacheWriteTokens: usage.inputTokenDetails.cacheWriteTokens,
+                    finishReason: part.finishReason
+                };
+            },
+            onError: (error) => {
+                console.error(error);
+                return error instanceof Error ? error.message : String(error);
+            }
+        })
     });
 }

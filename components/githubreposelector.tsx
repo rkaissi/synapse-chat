@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { GithubIcon } from "lucide-react";
+import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
 
 interface Props {
@@ -71,7 +71,7 @@ const GitHubRepoSelector = ({ onRepoSelect }: Props) => {
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                     placeholder="https://github.com/owner/repository"
-                    className="flex-grow"
+                    className="grow"
                     disabled={isLoading}
                 />
                 <Button
@@ -79,7 +79,7 @@ const GitHubRepoSelector = ({ onRepoSelect }: Props) => {
                     disabled={isLoading}
                     className="whitespace-nowrap"
                 >
-                    <GithubIcon className="w-4 h-4 mr-2" />
+                    <GitHubLogoIcon className="w-4 h-4 mr-2" />
                     {isLoading ? "Connecting..." : "Connect Repository"}
                 </Button>
             </form>
