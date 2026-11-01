@@ -15,12 +15,20 @@ A full pass over the interface. Known issues and ideas collected so far:
 
 - Narrow windows (< 1024px) open the sidebar as a full overlay by default, covering the chat
 - Long model badges wrap into a circle next to "Assistant" when the chat column is narrow
+- Generated images have no dedicated card (prompt, size, download); they rely on the model writing markdown
 - Tool calls show as plain name chips; repo tools (`repo_read_file`, `repo_search`, …) deserve a compact "explored N files" view with the paths
 - The GitHub connect bar takes a full row above the chat; it could live in the composer or header
 - [ ] Make it easier to turn on/off tools and artifacts (beside chatbox)
 - [ ] Add response format
 
 ![image](https://github.com/user-attachments/assets/ac8619b6-8c6f-4352-90d5-d1d7cf84169c)
+
+### Agents
+
+- [ ] Stream agent progress into the chat: the network runs sequentially and the chat shows nothing until every agent has finished (often 30s+)
+- [x] Per-role models: Programmer on GPT-6.1 Sol, Writer on GPT-6.1 Terra, everything else on GPT-6 Luna
+- [ ] Consider GPT-6.1 Sol for the Mathematician and Logician (reasoning-heavy roles)
+- [ ] Trim the verbose agent prompt logging in the server console
 
 ### Agents preview page
 
@@ -29,9 +37,17 @@ An `app/preview/agents` page was started (empty) and removed so builds pass. The
 - [ ] Build the page on top of `/api/agents`, streaming each agent message as it is produced
 - [ ] Visualize the task list and which agent is working on what
 
+### Model routing and providers
+
+- [ ] Overhaul Auto routing. Today `determineModel` substring-matches the last message against ~127 keywords (`keywordCategories` in `app/api/chat/config.ts`): any hit routes to GPT-6.1 Sol, otherwise GPT-6 Luna. Substring matching misfires ("app" matches "happy", "code" matches "decode") and ignores conversation context. Options: a cheap classifier call (Luna with `Output.choice`), routing on attachments/tools/length, or letting the user pick a speed/quality preference.
+- [ ] Replace the hand-written `getModel` switch with the AI SDK's built-in `createProviderRegistry` + `customProvider`. They support model aliases ("fast", "smart", "reasoning"), per-alias middleware and default settings, and `provider:model` ids. The custom "Reasoning" model then becomes an alias (e.g. Opus 5.5 with `reasoning: "high"`) instead of a special provider case. Optionally the Vercel AI Gateway (one key, `openai/gpt-6-luna` style ids).
+
 ### Web search
 
-- [ ] Replace `bing_web_search`: Microsoft retired the Bing Search API in August 2025. Options: provider-native search tools (OpenAI / Anthropic web search) or a search API such as Brave, Tavily or Exa
+- [ ] Replace `bing_web_search` (the Bing Search API was retired; calls return 401). Options:
+  - OpenAI's built-in web search tool, called from a tool so it works for any chat model (uses the existing OpenAI key)
+  - Anthropic's web search tool (Anthropic models only)
+  - A search API such as Brave, Tavily or Exa (needs a new key); keeps the existing sources/images/related-searches cards
 - [ ] Turn on search mode like ChatGPT Search
 
 ### GitHub integration follow-ups

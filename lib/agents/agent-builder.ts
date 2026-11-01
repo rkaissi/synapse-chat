@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { getModel, ModelConfig } from "@/lib/utils/model-provider";
-import { generateText, Output } from "ai";
+import {
+    getModel,
+    ModelConfig,
+    models,
+    reasoningModels
+} from "@/lib/utils/model-provider";
+import { generateText, NoOutputGeneratedError, Output } from "ai";
+
+const MAX_ATTEMPTS = 2;
 
 // Define the Agent interface
 interface Agent {
@@ -354,17 +361,41 @@ export class AgentBuilder {
             execute: async (prompt: string, context?: string) => {
                 const fullPrompt = `Instructions: ${prompt}\n\nContext: ${context}\n\nInstructions: ${prompt}`;
 
-                const { output } = await generateText({
-                    model: getModel(config.model),
-                    instructions: config.role,
-                    temperature: config.temperature,
-                    maxOutputTokens: config.maxTokens,
-                    prompt: fullPrompt,
-                    output: Output.object({ schema: config.schema }),
-                    providerOptions: { openai: { strictJsonSchema: false } }
-                });
+                // Reasoning models only support the default temperature
+                const isReasoning = reasoningModels.some(
+                    (key) => models[key].model === config.model.model
+                );
 
-                return output;
+                // A model occasionally returns no parseable object; retry once
+                // before failing the whole network
+                for (let attempt = 1; ; attempt++) {
+                    const result = await generateText({
+                        model: getModel(config.model),
+                        instructions: config.role,
+                        temperature: isReasoning ? undefined : config.temperature,
+                        maxOutputTokens: config.maxTokens,
+                        prompt: fullPrompt,
+                        output: Output.object({ schema: config.schema }),
+                        providerOptions: { openai: { strictJsonSchema: false } }
+                    });
+
+                    try {
+                        return result.output;
+                    } catch (error) {
+                        if (
+                            !NoOutputGeneratedError.isInstance(error) ||
+                            attempt >= MAX_ATTEMPTS
+                        ) {
+                            throw new Error(
+                                `${config.name} returned no usable output (finish reason: ${result.finishReason})`,
+                                { cause: error }
+                            );
+                        }
+                        console.warn(
+                            `${config.name} returned no usable output (finish reason: ${result.finishReason}), retrying`
+                        );
+                    }
+                }
             }
         };
     }

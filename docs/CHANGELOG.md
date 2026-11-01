@@ -2,6 +2,40 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Agent models
+
+- The two roles that used Claude Opus 5.5 now use OpenAI models: **Programmer → GPT-6.1 Sol** (near-Astra quality for complex work) and **Writer → GPT-6.1 Terra** (fast, clear natural writing). All other roles stay on GPT-6 Luna. Each was tested with one agent call and returned a valid structured result.
+
+## 2026-11-01 — Tool check and image generation
+
+Every chat tool was run directly against its API:
+
+| Tool | Status |
+|---|---|
+| `get_current_time`, `execute_javascript`, `get_current_weather`, `wikipedia_get_page_summary` | Working |
+| `wikipedia_search` | **Fixed**: Wikimedia rate-limited requests (HTTP 429) without a descriptive `User-Agent` header |
+| `get_youtube_video_transcript` | **Fixed**: `youtube-transcript` now returns offsets in milliseconds, so a timestamp at 1.2s showed as "20:00" |
+| `generate_image` (was `generate_dalle_image`) | **Updated** to GPT Image 2.5 Flare, see below |
+| `bing_web_search` | **Broken**: the Bing Search API was retired (HTTP 401). Needs a replacement provider, see the [roadmap](./ROADMAP.md) |
+
+Image generation:
+
+- Uses `gpt-image-2.5-flare` (OpenAI's fast everyday image model) through the AI SDK's `generateImage`, with `quality` (low/medium/high) and `size` (square, landscape, portrait).
+- GPT Image returns image data instead of a URL. Images are stored in MongoDB (`models/image.ts`) and served from `/api/images/[id]`; the model gets that short URL, so base64 never enters the chat history or saved chats. Images are WebP at 80% quality.
+- **Bug fixed while testing**: the image route returned empty responses because lean MongoDB documents hold binary data as BSON `Binary`, not a Node `Buffer`.
+- The direct `openai` SDK dependency was removed (DALL·E was its only use).
+- Removed `readUrl` from the settings menu's "force a tool" list; that tool is disabled on the server, so forcing it failed.
+
+Agents: re-ran the prompt that failed before ("Help me plan a 7-day trip to Japan…"); it now completes (Writer → Verifier → Editor, each reviewed by the Supervisor).
+
+## 2026-11-01 — Agents mode fixed
+
+- **Agents mode failed with "No output generated".** An agent's response sometimes didn't contain a usable structured object, and the AI SDK's `result.output` throws in that case, which failed the whole network. The Programmer and Writer roles ran on Claude Opus 5.5 and the Programmer runs first, making it the likely trigger (not re-run on Opus, to avoid the cost).
+- All agent roles now use **GPT-6 Luna**. A full run (Project Manager → Programmer → Supervisor → Debugger → Supervisor) completes in the app with no errors or warnings.
+- An agent that returns no usable output is retried once, and errors now name the agent and finish reason instead of the generic SDK message.
+- Agents no longer send `temperature` to reasoning models.
+- The Supervisor's `updatedContext` schema no longer uses `z.record`, which produced a `propertyNames` constraint OpenAI can't enforce (logged as a warning on every call).
+
 ## 2026-11-01 — Database connection and warnings
 
 - **A failed MongoDB connection was cached forever.** `dbConnect` swallowed the error and cached the failed attempt, so the app never retried. Every query then waited 10 seconds and failed with "buffering timed out" (for example, when the dev server started while a paused Atlas cluster was still waking up). It now logs the real error and retries on the next request.
