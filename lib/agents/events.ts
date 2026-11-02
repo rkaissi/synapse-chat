@@ -52,7 +52,8 @@ export type AgentEvent =
           report: string;
           at: number;
       }
-    | { type: "run-finish"; at: number }
+    | { type: "step-error"; id: string; message: string; at: number }
+    | { type: "run-finish"; incomplete?: boolean; report?: string; at: number }
     | { type: "error"; message: string; at: number };
 
 // Distributes Omit over the union so each event keeps its own fields

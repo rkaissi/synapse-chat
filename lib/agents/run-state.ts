@@ -13,6 +13,7 @@ export interface AgentStep {
     startedAt: number;
     finishedAt?: number;
     content?: any;
+    error?: string;
 }
 
 export interface AgentPlan {
@@ -27,7 +28,7 @@ export interface AgentRevision {
     at: number;
 }
 
-export type RunStatus = "running" | "done" | "error";
+export type RunStatus = "running" | "done" | "partial" | "error";
 
 export interface AgentRunState {
     status: RunStatus;
@@ -105,8 +106,14 @@ export const applyAgentEvent = (
                         : step
                 )
             };
+        case "step-error":
+            return { ...state, steps: state.steps.map((step) =>
+                step.id === event.id
+                    ? { ...step, finishedAt: event.at, error: event.message }
+                    : step) };
         case "run-finish":
-            return { ...state, status: "done", finishedAt: event.at };
+            return { ...state, status: event.incomplete ? "partial" : "done",
+                error: event.report, finishedAt: event.at };
         case "error":
             return {
                 ...state,
@@ -149,6 +156,7 @@ export const getTaskStatuses = (
         const review = find("review");
 
         if (!task) return superseded ? "skipped" : "pending";
+        if (task.error || review?.error) return "flagged";
         if (task.finishedAt === undefined) return superseded ? "stopped" : "working";
         // Finished but the run ended before the review completed
         if (review?.finishedAt === undefined) return superseded ? "done" : "reviewing";
@@ -220,17 +228,21 @@ export const runStateFromMessages = (
 
 // What the chat model gets back from call_agents. Like subagents in other
 // frameworks, it sees the agents' deliverables, not their whole conversation:
-// each agent's latest result (without its thinking), plus the Supervisor's
+// each task's latest successful result (without thinking), plus the Supervisor's
 // open concerns if the run ended with a revision still requested.
 export const summarizeRunForModel = (run: AgentRunState) => {
-    const latestByAgent = new Map<string, AgentStep>();
+    const latestByTask = new Map<string, AgentStep>();
     for (const step of run.steps) {
-        if (step.kind === "task" && step.finishedAt !== undefined) {
-            latestByAgent.delete(step.agent);
-            latestByAgent.set(step.agent, step);
+        if (step.kind === "task" && step.finishedAt !== undefined && !step.error) {
+            // A worker may produce several independent deliverables after a
+            // large task is split. Keep each one, replacing only repeat work
+            // on the same task (e.g. a later revision).
+            const key = JSON.stringify([step.agent, step.instructions ?? ""]);
+            latestByTask.delete(key);
+            latestByTask.set(key, step);
         }
     }
-    const results = [...latestByAgent.values()].map((step) => {
+    const results = [...latestByTask.values()].map((step) => {
         const { innerThinking: _thinking, ...output } = step.content ?? {};
         return { agent: step.agent, task: step.instructions, output };
     });
@@ -238,9 +250,14 @@ export const summarizeRunForModel = (run: AgentRunState) => {
     const lastReview = run.steps.findLast(
         (step) => step.kind === "review" && step.finishedAt !== undefined
     );
-    const openConcerns = lastReview?.content?.needsRevision
-        ? lastReview.content.report || lastReview.content.summary
-        : undefined;
+    const openConcerns = run.error || (lastReview?.error
+        ? lastReview.error
+        : lastReview?.content?.needsRevision
+          ? lastReview.content.report || lastReview.content.summary
+          : undefined);
+    const failures = run.steps.filter((step) => step.error).map((step) => ({
+        agent: step.agent, task: step.instructions, error: step.error
+    }));
 
-    return { results, ...(openConcerns && { openConcerns }) };
+    return { results, ...(failures.length && { failures }), ...(openConcerns && { openConcerns }) };
 };

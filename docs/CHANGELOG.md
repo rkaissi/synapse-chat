@@ -2,6 +2,16 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Agent time budgets, recovery and preserved results
+
+- **Long agent runs no longer rely on the 100-second chat limit.** Both agent entry points request 300 seconds. Chat reserves a shared 240-second network budget from request start, leaving time for the outer reply; each step is bounded to 120 seconds. Silent calls send a progress heartbeat every 10 seconds. Hosting hard limits still apply; this is not background/resumable execution.
+- **A failed or stuck worker now goes to the Supervisor and then back to the Project Manager** for a bounded recovery plan (split/reassign, preserve completed work). A failed Supervisor produces a deterministic revision report. Cancellation and the total deadline stop new calls instead of entering recovery. Step-level errors show the actual reason; exhausted recovery is marked partial rather than successful. The outer model cannot call the network again in the same response.
+- **Recovery planning was missing its context.** The PM prompt referred to `project_context` but never included it; recovery now includes the pending tasks and last review, so the PM can retain unfinished work instead of guessing. Fixed unclosed task/past-message context tags as well.
+- **Completed deliverables are retained on failure and across task splits.** The outer model receives the latest successful result per task, not just per agent (which discarded earlier files from the same Programmer), plus failures/open concerns. The interrupted-step fallback no longer implies a specific cause that the client cannot know.
+- **More token headroom:** workers 16k -> 32k, Writer 32k -> 64k, Programmer 64k -> 128k, outer Agents reply 32k -> 128k (leads stay at 16k). Existing structured-output retries remain capped at one and double the budget on `length`, up to the model limit. Initial budgets are also clamped, errors report the output budget, and the documented default reasoning effort is now actually passed to the provider.
+- Request cancellation reaches the outer model and agent calls; closing the tool stream cancels background execution and cleans up heartbeat/step/run timers. Removed verbose full-prompt/result console dumps while restructuring execution.
+- Added `npm run test:agents` with deterministic, no-API regression coverage and `docs/AGENT_RUNS.md`. Added the repository's `AGENTS.md` to version control and refreshed the agent guidance in both instruction files.
+
 ## 2026-11-02 — Web search for agents
 
 - **Agents can search the web.** Agents had no tools at all, so in Agents mode only the outer chat could search, and the Researcher was switched off. `AgentBuilder` now takes `webSearch: true`, which gives an agent OpenAI's hosted web search. The search runs inside the same response, so the agent still returns its structured result in one call. Only OpenAI models can use it; building a non-OpenAI agent with it throws.

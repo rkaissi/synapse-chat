@@ -20,7 +20,7 @@ npm run start
 npm run lint    # eslint . (flat config in eslint.config.mjs; Next 16 removed `next lint`)
 ```
 
-There is no test suite. Type-check with `npx tsc --noEmit`.
+Run the deterministic agent regression tests with `npm run test:agents` (no paid model calls). Type-check with `npx tsc --noEmit`.
 
 TypeScript is pinned to `~6.0`: TypeScript 7 drops the compiler API that Next's type-check and `typescript-eslint` need.
 
@@ -65,7 +65,9 @@ Large file holding default settings (`DEFAULT_*`), all system prompt fragments (
 ### Agents (`lib/agents/`)
 `createAgentNetwork()` (`index.ts`, where each role's model is set: Programmer and Writer on `gpt61terra`, the rest on `gpt6luna`) builds an `AgentNetwork` of role agents (Project Manager, Supervisor, Programmer, Debugger, Researcher, Verifier, etc.) via `AgentBuilder`, each with a zod schema in `schemas.ts` used through `generateText` + `Output.object` (with OpenAI `strictJsonSchema: false`, since the schemas have optional fields). Agents with `webSearch: true` (Researcher, Verifier; OpenAI models only) get OpenAI's hosted web search in that same call. In `"agents"` mode the chat route exposes the `call_agents` tool (`createAgentsTool` in `tools.ts`), which runs the network.
 
-`call_agents` is a streaming tool (`async function*` execute): `executePrompt` takes `{ onEvent, abortSignal }`, events (`lib/agents/events.ts`) are folded into a run snapshot by `applyAgentEvent` (`lib/agents/run-state.ts`), and each snapshot is yielded as a preliminary tool result. `toModelOutput` sends the model only `summarizeRunForModel` (each agent's latest deliverable plus open Supervisor concerns), like a subagent's final message. The client renders the snapshot in `components/tools/agentscard.tsx` (above the reply text) using the network graph, feed and panels in `components/agents/`; `runStateFromMessages` converts chats saved before streaming. Agent colors/icons live in `components/agents/agent-meta.ts`; add an entry there when adding an agent.
+`call_agents` is a streaming tool (`async function*` execute): `executePrompt` takes `{ onEvent, abortSignal }`, events (`lib/agents/events.ts`) are folded into a run snapshot by `applyAgentEvent` (`lib/agents/run-state.ts`), and each snapshot is yielded as a preliminary tool result. `toModelOutput` sends the model only `summarizeRunForModel` (each task's latest successful deliverable plus failures and open Supervisor concerns), like a subagent's final message. The client renders the snapshot in `components/tools/agentscard.tsx` (above the reply text) using the network graph, feed and panels in `components/agents/`; `runStateFromMessages` converts chats saved before streaming. Agent colors/icons live in `components/agents/agent-meta.ts`; add an entry there when adding an agent.
+
+Agent runs are bounded: the chat route allows 300s, the network gets up to 240s from request start (leaving time for the final reply), and each step gets 120s (`lib/agents/limits.ts`). Failed workers go to the Supervisor and then the Project Manager for one bounded recovery round; cancellation and the total deadline never trigger recovery. Step errors, partial results and 10s heartbeats stream through `lib/agents/tool-stream.ts`. See `docs/AGENT_RUNS.md` for budgets, failure diagnostics and hosting limitations.
 
 The Tailwind config replaces the default color palette (only the families and shades listed in `tailwind.config.mts` exist), so check a class exists before using it.
 

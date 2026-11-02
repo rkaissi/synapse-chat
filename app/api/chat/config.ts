@@ -21,7 +21,7 @@ export const DEFAULT_AUTO_PRIORITY: AutoPriority = "cost";
 export const DEFAULT_AGENT_SETTINGS: Partial<Settings> = {
     temperature: 0.3,
     topP: 1,
-    maxTokens: 32000,
+    maxTokens: 128000,
     toolChoice: "auto"
 };
 

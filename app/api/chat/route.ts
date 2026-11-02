@@ -43,19 +43,22 @@ import { describeRepo, getRepoSnapshot } from "@/lib/github/repo";
 import { createRepoTools } from "@/lib/github/tools";
 import { routeRequest } from "@/lib/routing/auto-router";
 import { getUserId } from "@/lib/user";
+import { AGENT_RUN_TIMEOUT_MS } from "@/lib/agents/limits";
 
-export const maxDuration = 100; // Timeout in seconds
+// Includes the whole agent network and the outer model's final reply.
+export const maxDuration = 300;
 
 
 const getToolsToUse = (
     toolChoice: ToolChoice,
     model: ModelKey,
-    messages: ChatUIMessage[]
+    messages: ChatUIMessage[],
+    agentDeadlineAt: number
 ): { toolChoice: ToolChoice; tools: any } => {
     const previousAssistantMessage = getMessageText(
         messages.findLast((message) => message.role === "assistant")
     );
-    const agentsTool = createAgentsTool(previousAssistantMessage);
+    const agentsTool = createAgentsTool(previousAssistantMessage, agentDeadlineAt);
 
     if (toolChoice === "none" || unsupportedToolUseModels.includes(model)) {
         return {
@@ -76,6 +79,7 @@ const getToolsToUse = (
 };
 
 export async function POST(req: Request) {
+    const agentDeadlineAt = Date.now() + AGENT_RUN_TIMEOUT_MS;
     const {
         messages,
         settings,
@@ -135,7 +139,8 @@ export async function POST(req: Request) {
     const { toolChoice: finalToolChoice, tools: toolsToUse } = getToolsToUse(
         toolChoice,
         model,
-        messages
+        messages,
+        agentDeadlineAt
     );
     const {
         temperature: finalTemperature,
@@ -225,6 +230,16 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
         ),
         tools: { ...toolsToUse, ...repoTools },
         toolChoice: finalToolChoice,
+        abortSignal: req.signal,
+        // A network already has its own recovery/revision budget. Do not let
+        // the outer model start the same run again after an incomplete result.
+        prepareStep: ({ steps }) => ({
+            activeTools: Object.keys({ ...toolsToUse, ...repoTools }).filter(
+                (name) => name !== "call_agents" || !steps.some((step) =>
+                    step.toolResults.some((result) => result.toolName === "call_agents")
+                )
+            )
+        }),
         stopWhen: isStepCount(maxSteps),
         experimental_transform: smoothStream()
     });

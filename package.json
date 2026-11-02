@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test:agents": "node --test tests/agents.test.mjs",
     "docs:auto-routing": "node --no-warnings scripts/auto-routing-table.mjs",
     "claim-legacy-chats": "node scripts/claim-legacy-chats.mjs"
   },

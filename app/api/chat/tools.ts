@@ -5,11 +5,8 @@ import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
 import { formatTime } from "@/lib/utils/format";
 import { createAgentNetwork } from "@/lib/agents";
-import {
-    applyAgentEvent,
-    createRunState,
-    summarizeRunForModel
-} from "@/lib/agents/run-state";
+import { summarizeRunForModel } from "@/lib/agents/run-state";
+import { streamAgentRun } from "@/lib/agents/tool-stream";
 import executeJavaScript from "@/lib/tools/eval";
 import { imageModel, models } from "@/lib/utils/model-provider";
 import dbConnect from "@/lib/db";
@@ -35,7 +32,7 @@ const fetchJson = async (url: string | URL, init?: RequestInit) => {
 
 const agentNetwork = createAgentNetwork();
 
-export const createAgentsTool = (previousAssistantMessage: string) =>
+export const createAgentsTool = (previousAssistantMessage: string, deadlineAt?: number) =>
     tool({
         description:
             "Call upon agents to perform a specific task. Once you receive their response, double-check and verify it for any issues or missing information. If any arise, add a note amending them. Output a formatted final response to the user.",
@@ -55,64 +52,12 @@ export const createAgentsTool = (previousAssistantMessage: string) =>
         // Yields a run snapshot after every agent event so the chat can show
         // progress live; the last value is the final result
         execute: async function* ({ project, context }, { abortSignal }) {
-            let run = createRunState();
-            let changed = false;
-            let wake: (() => void) | undefined;
-            let outcome: { messages?: any[]; error?: unknown } | undefined;
-
-            agentNetwork
-                .executePrompt(
-                    project,
-                    `${context ?? ""}\n\n## Previous user content:\n${previousAssistantMessage}`,
-                    undefined,
-                    {
-                        abortSignal,
-                        onEvent: (event) => {
-                            run = applyAgentEvent(run, event);
-                            changed = true;
-                            wake?.();
-                        }
-                    }
-                )
-                .then(
-                    (messages) => (outcome = { messages }),
-                    (error) => (outcome = { error })
-                )
-                .finally(() => wake?.());
-
-            while (!outcome) {
-                if (!changed) {
-                    await new Promise<void>((resolve) => (wake = resolve));
-                }
-                if (changed) {
-                    changed = false;
-                    yield { status: "Running", run };
-                }
-            }
-
-            if (outcome.error !== undefined) {
-                const message =
-                    outcome.error instanceof Error
-                        ? outcome.error.message
-                        : String(outcome.error);
-                yield {
-                    status: "Error: Fulfill the user request without calling the agents. Preface the response with this error",
-                    error: `An error occurred while trying to receive the agents' responses. Error: ${message}`,
-                    run: {
-                        ...run,
-                        status: "error" as const,
-                        error: message,
-                        finishedAt: Date.now()
-                    }
-                };
-                return;
-            }
-
-            yield {
-                status: "Success: Tasks completed successfully!",
-                messages: outcome.messages,
-                run
-            };
+            yield* streamAgentRun(
+                agentNetwork,
+                project,
+                `${context ?? ""}\n\n## Previous assistant content:\n${previousAssistantMessage}`,
+                { abortSignal, deadlineAt }
+            );
         },
         // The model gets the agents' deliverables, not their full exchange
         // (plans, reviews, thinking); on failure, what finished plus the error

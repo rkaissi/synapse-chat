@@ -1,12 +1,14 @@
 import { createAgentNetwork } from "@/lib/agents";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 300;
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json();
     
     const agentNetwork = createAgentNetwork();
-    const result = await agentNetwork.executePrompt(prompt);
+    const result = await agentNetwork.executePrompt(prompt, "", undefined, { abortSignal: req.signal });
     
     // Ensure result is an array
     const messages = Array.isArray(result) ? result : [result];
