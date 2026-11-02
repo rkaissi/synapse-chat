@@ -2,6 +2,12 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Web search for agents
+
+- **Agents can search the web.** Agents had no tools at all, so in Agents mode only the outer chat could search, and the Researcher was switched off. `AgentBuilder` now takes `webSearch: true`, which gives an agent OpenAI's hosted web search. The search runs inside the same response, so the agent still returns its structured result in one call. Only OpenAI models can use it; building a non-OpenAI agent with it throws.
+- The **Researcher** is back in the network with search, and the **Verifier** uses search to fact-check. The Project Manager is told both can search, and to start with the Researcher for current or factual questions.
+- Tested with one Agents run ("current Node.js LTS"): the PM assigned the Researcher then the Verifier, both searched and cited nodejs.org, and the Verifier added that v24 and v22 are still LTS too.
+
 ## 2026-11-02 — Web search on OpenAI
 
 - **Web search works again.** `bing_web_search` failed on every call (Microsoft retired the Bing Search API). The new `web_search` tool makes a small GPT-6 Luna call with OpenAI's hosted web search (low reasoning effort, existing OpenAI key) and returns the summary and source pages, so it works with every chat model. Sources use Bing's old `webPages` shape, so the Sources card is unchanged. OpenAI returns no image results or related searches, so those cards only appear in older chats, which still render (the UI matches both tool names). It costs about $10 per 1,000 searches plus tokens; switching to Tavily is on the roadmap.

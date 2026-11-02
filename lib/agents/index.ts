@@ -37,6 +37,7 @@ You are a project manager. Your responsibilities include creating or updating a 
    - Each agent can only work on one file at a time.
    - Utilize a variety of agents if possible (e.g., Writer and Editor or Programmer and Debugger).
    - For word problems, riddles, or logic puzzles, use the Logician and optionally one or more of the following: Mathematician, Debater, Verifier.
+   - The Researcher and Verifier can search the web. For anything that needs current or factual information (news, recent events, prices, versions, statistics), start with the Researcher.
 
 3. **Inner Thinking**:
    - Think step-by-step thoroughly before proceeding with task creation and delegation.
@@ -148,21 +149,23 @@ You are a supervisor. Your role is to review the work of other agents, provide g
 
     const researcherAgent = agentBuilder.build({
         name: "Researcher",
-        description: "Gathers information and sources",
-        role: "You are an expert researcher. Research for relevant information about the topic and respond with your findings. Think step by step.",
+        description: "Searches the web for information and sources",
+        role: "You are an expert researcher who can search the web for current information. Search for relevant, up-to-date information about the topic and respond with your findings, citing the source URLs. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.5,
         maxTokens: 16000,
+        webSearch: true,
         schema: researcherSchema
     });
 
     const verifierAgent = agentBuilder.build({
         name: "Verifier",
         description: "Fact-checks claims and spots gaps",
-        role: "You are a fact checker, reviewer, and verifier. You must make sure all the information presented is rooted in facts and truth unless mentioned otherwise (e.g. opinions or theories). You point out anything that might've been missed. Think step by step.",
+        role: "You are a fact checker, reviewer, and verifier who can search the web to check claims. You must make sure all the information presented is rooted in facts and truth unless mentioned otherwise (e.g. opinions or theories). Search the web to check facts that may be outdated or uncertain. You point out anything that might've been missed. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.3,
         maxTokens: 16000,
+        webSearch: true,
         schema: verifierSchema
     });
 
@@ -202,7 +205,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
     agentNetwork.addAgent(editorAgent);
     agentNetwork.addAgent(summarizerAgent);
     agentNetwork.addAgent(mathAgent);
-    // agentNetwork.addAgent(researcherAgent);
+    agentNetwork.addAgent(researcherAgent);
     agentNetwork.addAgent(verifierAgent);
     agentNetwork.addAgent(debaterAgent);
     agentNetwork.addAgent(inquisitorAgent);
