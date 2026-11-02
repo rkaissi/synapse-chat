@@ -1,5 +1,13 @@
 import { AUTO_ROUTER_MODELS, CombinedMessage, NewMessage } from "@/lib/types";
-import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
+import {
+    memo,
+    useCallback,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode
+} from "react";
 import {
     Avatar,
     AvatarFallback,
@@ -106,28 +114,48 @@ export const Messages = ({
                     ) : null;
                 if (!content) return null;
                 return (
-                    <div
+                    <SkippableWhenOffscreen
                         key={message.id}
-                        // Off-screen messages skip layout and paint, which keeps
-                        // long chats responsive. The latest exchange always renders
-                        style={
-                            index < messages.length - 2
-                                ? offscreenMessageStyle
-                                : undefined
-                        }
+                        // The latest exchange always renders
+                        enabled={index < messages.length - 2}
                     >
                         {content}
-                    </div>
+                    </SkippableWhenOffscreen>
                 );
             })}
         </>
     );
 };
 
-const offscreenMessageStyle: CSSProperties = {
-    contentVisibility: "auto",
-    // Remembers each message's rendered height once it has been on screen
-    containIntrinsicSize: "auto 400px"
+/**
+ * Off-screen messages skip layout and paint (`content-visibility: auto`),
+ * which keeps long chats responsive. The placeholder size is the message's
+ * measured height: a fixed guess made the scroll height jump when a loaded
+ * chat's messages first came on screen.
+ */
+const SkippableWhenOffscreen = ({
+    enabled,
+    children
+}: {
+    enabled: boolean;
+    children: ReactNode;
+}) => {
+    const ref = useRef<HTMLDivElement>(null);
+
+    // Set on the element directly: measuring needs one normal layout first
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        if (!enabled) {
+            element.style.contentVisibility = "";
+            element.style.containIntrinsicSize = "";
+        } else if (!element.style.contentVisibility) {
+            element.style.containIntrinsicSize = `auto ${element.offsetHeight}px`;
+            element.style.contentVisibility = "auto";
+        }
+    }, [enabled]);
+
+    return <div ref={ref}>{children}</div>;
 };
 
 interface UserMessageProps {
