@@ -95,28 +95,34 @@ const getLanguageInfo = (lang: string) => {
     return { extension, displayName };
 };
 
-const showdownCode: showdown.ShowdownExtension = {
-    type: "output",
-    filter: (text: string) => {
-        const codeRegex =
-            /<pre><code\s+class="([^"]+)">([\s\S]*?)<\/code><\/pre>/g;
+// Turns <pre><code class="language-x"> blocks into highlighted code blocks
+// with copy and download buttons. markdownToHtml runs it on sanitized HTML
+export const highlightCodeBlocks = (text: string) => {
+    const codeRegex =
+        /<pre><code\s+class="([^"]+)">([\s\S]*?)<\/code><\/pre>/g;
 
-        return text.replace(
-            codeRegex,
-            (match, language: string, code: string) => {
-                const decodedCode = decodeHTML(code).trim();
-                const lang = language.split("language-")[1] || "plaintext";
+    return text.replace(
+        codeRegex,
+        (match, language: string, code: string) => {
+            const decodedCode = decodeHTML(code).trim();
+            // The language comes from the model's code fence and is
+            // inserted into the markup below, so keep it to safe characters
+            const lang =
+                (language.split("language-")[1] || "").replace(
+                    /[^\w#+.-]/g,
+                    ""
+                ) || "plaintext";
 
-                const { value: highlightedCode, language: detectedLang } =
-                    highlightCode(decodedCode, lang);
+            const { value: highlightedCode, language: detectedLang } =
+                highlightCode(decodedCode, lang);
 
-                const { extension, displayName } =
-                    getLanguageInfo(detectedLang);
+            const { extension, displayName } =
+                getLanguageInfo(detectedLang);
 
-                // Generate a default filename based on language
-                const defaultFilename = `code.${extension}`;
+            // Generate a default filename based on language
+            const defaultFilename = `code.${extension}`;
 
-                return `
+            return `
 <div class="code-block" data-extension="${extension}" data-language="${detectedLang}">
   <div class="code-header">
     <div class="flex items-center gap-2">
@@ -145,9 +151,13 @@ const showdownCode: showdown.ShowdownExtension = {
   </div>
   <pre class="code-pre"><code class="hljs ${detectedLang}">${highlightedCode}</code></pre>
 </div>`;
-            }
-        );
-    }
+        }
+    );
+};
+
+const showdownCode: showdown.ShowdownExtension = {
+    type: "output",
+    filter: highlightCodeBlocks
 };
 
 export default showdownCode;

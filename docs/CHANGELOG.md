@@ -7,6 +7,18 @@ Notable changes, including bugs found and fixed while testing. Newest first.
 - **Markdown is converted and rendered block by block.** `markdownToHtml` splits the reply into top-level blocks (never inside code fences or `$$` math, and never between list items), converts each block once with a single shared Showdown converter (it used to build a new one on every call), and caches the result. `CustomMarkdown` only replaces the blocks that changed, so a streaming reply rebuilds just the block being written instead of the whole message, and text selections above it survive. Documents with reference-style links or raw HTML blocks are still converted whole.
 - **Code highlighting is cached.** Recent highlight.js results are reused, so finished code blocks aren't highlighted again on every streamed update, and the artifact code view doesn't re-highlight the whole file when the chat re-renders (e.g. on each keystroke). Fixed the language-detection cache, which saved results under the detected language rather than the requested one, so `highlightAuto` (which tries every language) ran on every update for unknown languages.
 - **Older messages no longer re-render on every update.** User and assistant messages are memoized and the chat passes stable callbacks. Messages outside the latest exchange use `content-visibility: auto`, so long chats skip layout and paint for messages off screen. The placeholder size is each message's measured height: with a fixed 400px guess, a loaded chat's scroll height jumped (6114px to 2350px in testing) the first time its messages came on screen.
+- **Code is highlighted after sanitizing.** DOMPurify used to walk every highlight.js span; now it sanitizes the escaped code and `highlightCodeBlocks` adds the highlighting afterwards, which took a 30-line code block from about 22 ms to 4 ms to convert. The fence language is now limited to safe characters, since it is inserted into the code block markup. Also replaced the unclosed-code regex, which backtracked through every closed code block (quadratic time), with a line-by-line fence check.
+- Each message's placeholder height is measured in a single pass (all heights read, then all styles written), so loading a chat doesn't force one layout per message.
+- **Measured** (dev build, main vs this branch alternated in the same page, 13.5k-character reply streamed in 30-character updates; each update timed through conversion, React commit and layout):
+
+  | | main | branch |
+  | --- | --- | --- |
+  | Streaming update, mean | 68 ms | 10.6 ms |
+  | Streaming update, last 20 updates | 132 ms | 6 ms |
+  | Streaming update with an unknown-language code block, mean / last 20 | 190 ms / 470 ms | 9.6 ms / 6 ms |
+  | 40-message chat, streamed update | 74 ms | 16 ms |
+  | 40-message chat, re-render while typing | 14-20 ms | 1.3 ms |
+  | 40-message chat, initial render | 440-540 ms | 460-560 ms |
 - **Fixed the user's message sometimes being lost.** Messages are processed one frame later, and only the latest one; when the reply started before that frame ran (always, in a background tab, where browsers pause animation frames), the user's message was never added to the chat or saved. Earlier unprocessed messages are now added too, and processing falls back to a timeout in background tabs so a reply that finishes there is still saved.
 
 ## 2026-11-02 — Hobby-compatible requests and 2.5-minute steps
