@@ -5,7 +5,7 @@ Notable changes, including bugs found and fixed while testing. Newest first.
 ## 2026-11-02 — Ten-minute agent request limit
 
 - Raised both chat/agents route duration limits from 300 to **600 seconds**. The shared network budget increases from 240 to **540 seconds** from request start, still reserving a minute for the final chat reply. Per-step timeouts remain 120 seconds, so a stuck worker can still trigger recovery rather than consuming the entire request.
-- Updated the agent guidance and run-limit docs, including the Vercel deployment caveat: 600 seconds requires Pro/Enterprise with Fluid Compute; Hobby's 300-second cap cannot be overridden in code. Added a regression check to keep route durations and the network's reply reserve aligned.
+- Updated the agent guidance and run-limit docs, including the Vercel deployment caveat: Pro/Enterprise with Fluid Compute support 600 seconds; Hobby's 300-second cap with Fluid Compute cannot be overridden in code. Added a regression check to keep route durations and the network's reply reserve aligned.
 
 ## 2026-11-02 — Agent time budgets, recovery and preserved results
 
