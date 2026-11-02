@@ -1,6 +1,6 @@
 # Synapse Chat
 
-An [AI chatbot](https://ai-chat-artifacts.onrender.com/) that supports chat artifacts (like Claude), Bing web search (like Perplexity.ai), multi-turn agentic workflows, open source models, advanced CoT logic and reasoning mode, memory, vision, file upload, and much more.
+An [AI chatbot](https://ai-chat-artifacts.onrender.com/) that supports chat artifacts (like Claude), Bing web search (like Perplexity.ai), multi-turn agentic workflows, open source models, advanced CoT logic, adjustable reasoning effort, automatic model routing, memory, vision, file upload, and much more.
 
 ## Setup
 
@@ -131,4 +131,3 @@ Make sure to replace any placeholders in the `.env.example` file with your actua
 |--------------|--------------|------------|
 | Auto         | `auto`       | -          |
 | Agents       | `agents`     | -          |
-| Reasoning    | `reasoning`  | -          |

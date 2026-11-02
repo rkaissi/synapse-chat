@@ -15,6 +15,8 @@ const messageSchema: Schema = new Schema({
     attachments: { type: Schema.Types.Mixed },
     artifact: { type: artifactSchema },
     model: { type: String },
+    // AutoRoute in lib/types, when Auto picked the model
+    autoRoute: { type: Schema.Types.Mixed },
     toolInvocations: { type: [Schema.Types.Mixed] },
     completionTokens: { type: Number },
     promptTokens: { type: Number },

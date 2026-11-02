@@ -2,6 +2,65 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Smarter Auto, reasoning level for every model
+
+### Auto routing (now the default model)
+
+Auto used to substring-match the message against ~127 keywords: any hit went to GPT-6.1 Sol, everything else to Luna ("happy" matched "app", "decode" matched "code", and context was ignored). It now works like the routers in ChatGPT and OpenRouter (`lib/routing/auto-router.ts`):
+
+- **Classifier**: labels the latest message with a task (chat, factual, writing, coding, math, analysis, creative), a difficulty (trivial, standard, complex, expert) and whether it needs deep thinking. Which model classifies is a setting (**Settings → Auto Router**), default GPT-OSS 20B:
+
+  | Classifier | Correct | Prompts answered differently across runs | Errors | Median | p90 |
+  |---|---|---|---|---|---|
+  | GPT-OSS 20B (Groq, default) | 20/24 | 4/8 | 0 | 329 ms | 544 ms |
+  | Qwen 3.8 27B (Groq) | 20/22 | 4/8 | 2 | 414 ms | ~5 s |
+  | GPT-6 Luna Decisions API (OpenAI) | 21/24 | 0/8 | 0 | 170 ms | 448 ms |
+
+  8 labelled prompts × 3 runs, warm calls. Qwen 3.8 27B is the only Qwen model Groq serves. The Decisions API (`experimental_decide`, typed choice/score/boolean questions) was the most accurate, consistent and fastest, but it bills the OpenAI key, while the Groq models are free; GPT-OSS 20B stays the default. Both kinds of classifier use the same task and difficulty definitions. It sees the last two messages for follow-ups ("now make it faster") and signals such as attached images/files, code and a connected repository.
+- **Fast path**: obviously trivial messages ("hi", "thanks") skip the classifier.
+- **Rules over the classifier**: a request that contains or mentions code is a coding task.
+- **Policy (cost first)**: more reasoning effort on a cheaper model is tried before a pricier model.
+
+  | Difficulty | Model and reasoning |
+  |---|---|
+  | Trivial | Luna, low |
+  | Standard | Luna, medium |
+  | Complex | Terra, medium (coding, math, analysis, writing, creative); Luna, high (chat, factual) |
+  | Expert | Sol, high (Terra when premium models are off) |
+
+  "Needs deep thinking" raises the effort one level on the same model. Astra and Claude are never picked automatically.
+
+  The first version of this policy (Terra for standard coding/writing/creative, Sol or Claude Sonnet for complex work, Astra for expert work) picked Terra or better too often. It is kept as **Settings → Auto Priority → Performance**; Cost is the default. Both policies live in `lib/routing/policy.ts`, and [docs/AUTO_ROUTING.md](./AUTO_ROUTING.md) lists every combination (task × difficulty, with and without deep thinking, premium models on/off, repository connected), generated from the code with `npm run docs:auto-routing`.
+- **Fallback**: heuristics decide if the classifier fails or takes longer than 3.5 s.
+- **Visible**: the badge shows the pick ("Auto · GPT-6.1 Terra") and its tooltip the reason ("standard coding, medium reasoning"); the decision is saved with the message.
+
+Tested (with the first policy): "hi" → fast path, Luna low; "write a Python palindrome function" → Terra medium (now Luna medium); "one-line regex for a US zip code" → trivial coding, Luna low; "TCP vs UDP in two sentences" → trivial factual, Luna low (Decisions API).
+
+### Artifacts
+
+- **"Maximum update depth exceeded" with long artifacts** (still happening after the earlier throttle fix). The chat processed each streamed update inside an effect and set state from it; with a long artifact, each pass (artifact extraction, markdown, highlighting 1,000+ lines) took longer than the 50 ms stream throttle, so the next update was always waiting and React counted an unbroken chain of effect-triggered updates. Messages are now processed in the next animation frame (merging bursts), and the save on finish waits a frame so the final update is processed first. Re-tested with a 56,000-character HTML artifact: no warnings, saved complete.
+- **The artifact code view follows the stream** like the chat: it stays at the bottom while you're there, stops when you scroll up, resumes when you scroll back down, and scrolls independently of the chat.
+
+### Bug fixed
+
+- **"Failed to load chat data" when starting a new chat.** The chat decided whether to load from the database by looking for "/chat/" in the URL. Right after "New chat", the URL still showed the previous chat for a moment, so the new, unsaved chat requested itself and got a 404. The home page now marks its chat as new (`isNewChat`) and only `/chat/[id]` loads; a missing chat logs a warning instead of an error.
+
+### Reasoning
+
+- **Reasoning mode was removed.** It was Claude Opus 5.5 with a fixed 12k extended-thinking budget (originally a prompt that made non-reasoning models "think step by step" in tags; that middleware was still in the code, unused).
+- **The reasoning level now applies to every model**, including Claude (adaptive thinking) and Groq (`reasoning_effort`). Levels are Low, Medium, High and Extra high: "Minimal" was dropped because neither GPT-6 nor Claude support it, and Groq models are capped at High. All chat models are now called without temperature/top P (Claude 5.x rejects them; the reasoning models ignore them).
+- In Auto, the picker is hidden and the settings menu notes that Auto picks the level.
+
+### Model picker
+
+- Auto and Agents are listed first, under "Modes"; **Auto is the default model**.
+
+### Settings dialog
+
+- **The dialog ran past the top and bottom of the screen** (it had grown with each new setting). It's now a fixed-height panel (at most 88% of the window) with sections in a sidebar (Model, Auto, Features, Tools, Instructions; tabs across the top on phones), and only the section content scrolls. Checked down to a 380 px-tall window.
+- **Temperature and Top P were removed from the dialog**: every chat model now reasons and is called without them, so they did nothing. The values stay in the stored settings.
+- The Auto options use short labels (GPT-OSS 20B / Qwen 3.8 27B / Luna Decisions; Cost / Performance) with one-line hints.
+
 ## 2026-11-01 — Artifact isolation, chat scrolling, compact repo control
 
 - **An HTML artifact restyled the whole app** (a green border and changed margins after an agents run built a Snake game). Two causes, both fixed without removing anything from the artifact:

@@ -16,13 +16,16 @@ import {
     TooltipProvider,
     TooltipTrigger
 } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger
-} from "@/components/ui/accordion";
-import { Action, Settings, ToolChoice } from "@/lib/types";
+    Action,
+    AUTO_PRIORITIES,
+    AUTO_ROUTER_MODELS,
+    AutoPriority,
+    AutoRouterModel,
+    Settings,
+    ToolChoice
+} from "@/lib/types";
 import {
     Select,
     SelectContent,
@@ -45,13 +48,21 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { InfoIcon, Check, ChevronsUpDown } from "lucide-react";
+import {
+    InfoIcon,
+    Check,
+    ChevronsUpDown,
+    ScrollText,
+    SlidersHorizontal,
+    ToggleRight,
+    Waypoints,
+    Wrench
+} from "lucide-react";
 import {
     MAX_DEFAULT_INSTRUCTION_LENGTH_CHARS,
     tools
 } from "@/app/api/chat/config";
 import {
-    isReasoningModel,
     models,
     unsupportedArtifactUseModels,
     unsupportedToolUseModels
@@ -64,6 +75,27 @@ interface Props {
     settings: Settings;
     dispatch: React.Dispatch<Action>;
 }
+
+const SECTIONS = [
+    { value: "model", label: "Model", icon: SlidersHorizontal },
+    { value: "auto", label: "Auto", icon: Waypoints },
+    { value: "features", label: "Features", icon: ToggleRight },
+    { value: "tools", label: "Tools", icon: Wrench },
+    { value: "instructions", label: "Instructions", icon: ScrollText }
+];
+
+const SectionHeading = ({
+    title,
+    description
+}: {
+    title: string;
+    description: string;
+}) => (
+    <div className="pb-1">
+        <h3 className="text-base font-semibold">{title}</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+    </div>
+);
 
 const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
     // Auto and Agents route to GPT-6 models (128k output)
@@ -115,221 +147,224 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[550px]">
-                <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold">
+            <DialogContent className="flex h-[min(88vh,680px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[760px]">
+                <DialogHeader className="border-b px-6 py-4 text-left">
+                    <DialogTitle className="text-lg font-semibold">
                         Settings
                     </DialogTitle>
                     <DialogDescription>
-                        Adjust the AI model and conversation parameters.
+                        Saved in this browser and used for every chat.
                     </DialogDescription>
                 </DialogHeader>
-                <Accordion
-                    type="single"
-                    collapsible
-                    className="w-full"
-                    defaultValue="model-parameters"
+                <Tabs
+                    defaultValue="model"
+                    orientation="vertical"
+                    className="flex min-h-0 flex-1 flex-col sm:flex-row"
                 >
-                    <AccordionItem value="model-parameters">
-                        <AccordionTrigger>Model Parameters</AccordionTrigger>
-                        <AccordionContent>
-                            <div className="space-y-2 p-1">
-                                <div className="flex items-center space-x-4">
-                                    <Label
-                                        htmlFor="temperature"
-                                        className="w-36"
-                                    >
-                                        Temperature
-                                    </Label>
-                                    <Slider
-                                        id="temperature"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={[settings.temperature]}
-                                        onValueChange={(value) =>
-                                            dispatch({
-                                                type: "SET_TEMPERATURE",
-                                                payload: value[0]
-                                            })
-                                        }
-                                        className="w-full"
-                                    />
-                                    <Input
-                                        type="number"
-                                        value={settings.temperature}
-                                        onChange={(e) =>
-                                            dispatch({
-                                                type: "SET_TEMPERATURE",
-                                                payload: Number(e.target.value)
-                                            })
-                                        }
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        className="w-20"
-                                    />
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <Label htmlFor="maxTokens" className="w-36">
-                                        Max Tokens
-                                    </Label>
-                                    <Slider
-                                        id="maxTokens"
-                                        min={1}
-                                        max={maxPossibleOutput}
-                                        step={1}
-                                        value={[settings.maxTokens]}
-                                        onValueChange={(value) =>
-                                            handleSetMaxTokens(value[0])
-                                        }
-                                        className="w-full"
-                                    />
-                                    <Input
-                                        type="number"
-                                        value={settings.maxTokens}
-                                        onChange={(e) =>
-                                            handleSetMaxTokens(
-                                                Number(e.target.value)
-                                            )
-                                        }
-                                        min={1}
-                                        max={maxPossibleOutput}
-                                        step={1}
-                                        className="w-20"
-                                    />
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <Label htmlFor="reasoningLevel" className="w-36 shrink-0">
-                                        Reasoning Level
-                                    </Label>
-                                    <ReasoningLevelSelect
-                                        value={settings.reasoningLevel}
-                                        onChange={(value) =>
-                                            dispatch({
-                                                type: "SET_REASONING_LEVEL",
-                                                payload: value
-                                            })
-                                        }
-                                        className="w-full"
-                                    />
-                                </div>
-                                {!isReasoningModel(settings.model) &&
-                                    !["auto", "agents"].includes(settings.model) && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Reasoning level applies to reasoning models (GPT-6, GPT-OSS, Qwen).
-                                        </p>
-                                    )}
-                                <div className="flex items-center space-x-4">
-                                    <Label htmlFor="topP" className="w-36">
-                                        Top P
-                                    </Label>
-                                    <Slider
-                                        id="topP"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={[settings.topP]}
-                                        onValueChange={(value) =>
-                                            dispatch({
-                                                type: "SET_TOP_P",
-                                                payload: value[0]
-                                            })
-                                        }
-                                        className="w-full"
-                                    />
-                                    <Input
-                                        type="number"
-                                        value={settings.topP}
-                                        onChange={(e) =>
-                                            dispatch({
-                                                type: "SET_TOP_P",
-                                                payload: Number(e.target.value)
-                                            })
-                                        }
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        className="w-20"
-                                    />
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <div className="flex w-36">
-                                        <Label
-                                            htmlFor="topP"
-                                            className="w-full"
-                                        >
-                                            Message Limit
-                                        </Label>
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger>
-                                                    <InfoIcon className="h-4 w-4 text-gray-500" />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="max-w-96 overflow-auto">
-                                                        Controls how many
-                                                        previous messages are
-                                                        passed into context.
-                                                        Setting this to 0 means
-                                                        all messages are passed
-                                                        into context. Setting
-                                                        this too high may cause
-                                                        the context window to
-                                                        fill up.
-                                                        <br />
-                                                        <br />
-                                                        <b>Note:</b> Messages
-                                                        outside of the limit are
-                                                        automatically
-                                                        summarized.
-                                                    </p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-                                    <Slider
-                                        id="topP"
-                                        min={0}
-                                        max={20}
-                                        step={1}
-                                        value={[settings.messageLimit]}
-                                        onValueChange={(value) =>
-                                            dispatch({
-                                                type: "SET_MESSAGE_LIMIT",
-                                                payload: value[0]
-                                            })
-                                        }
-                                        className="w-full"
-                                    />
-                                    <Input
-                                        type="number"
-                                        value={settings.messageLimit}
-                                        onChange={(e) =>
-                                            dispatch({
-                                                type: "SET_MESSAGE_LIMIT",
-                                                payload: Number(e.target.value)
-                                            })
-                                        }
-                                        min={0}
-                                        max={20}
-                                        step={1}
-                                        className="w-20"
-                                    />
-                                </div>
+                    <TabsList className="h-auto shrink-0 justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-2 sm:w-44 sm:flex-col sm:items-stretch sm:justify-start sm:border-b-0 sm:border-r">
+                        {SECTIONS.map(({ value, label, icon: Icon }) => (
+                            <TabsTrigger
+                                key={value}
+                                value={value}
+                                className="justify-start gap-2 px-3 py-2 text-sm data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                            >
+                                <Icon className="h-4 w-4 shrink-0" />
+                                {label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <TabsContent value="model" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Model"
+                                description="Output length, reasoning effort and how much history is sent."
+                            />
+                            <div className="flex items-center space-x-4">
+                                <Label htmlFor="maxTokens" className="w-36">
+                                    Max Tokens
+                                </Label>
+                                <Slider
+                                    id="maxTokens"
+                                    min={1}
+                                    max={maxPossibleOutput}
+                                    step={1}
+                                    value={[settings.maxTokens]}
+                                    onValueChange={(value) =>
+                                        handleSetMaxTokens(value[0])
+                                    }
+                                    className="w-full"
+                                />
+                                <Input
+                                    type="number"
+                                    value={settings.maxTokens}
+                                    onChange={(e) =>
+                                        handleSetMaxTokens(
+                                            Number(e.target.value)
+                                        )
+                                    }
+                                    min={1}
+                                    max={maxPossibleOutput}
+                                    step={1}
+                                    className="w-20"
+                                />
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-
-                    <AccordionItem value="features">
-                        <AccordionTrigger>Features</AccordionTrigger>
-                        <AccordionContent>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                Enabling too many features may compromise the
-                                effectiveness of specific features or tools.
-                                Features such as Artifacts, Logic Mode, and
-                                Memory perform better with more advanced models.
+                            <div className="flex items-center space-x-4">
+                                <Label htmlFor="reasoningLevel" className="w-36 shrink-0">
+                                    Reasoning Level
+                                </Label>
+                                <ReasoningLevelSelect
+                                    disabled={settings.model === "auto"}
+                                    value={settings.reasoningLevel}
+                                    onChange={(value) =>
+                                        dispatch({
+                                            type: "SET_REASONING_LEVEL",
+                                            payload: value
+                                        })
+                                    }
+                                    className="w-full"
+                                />
+                            </div>
+                            {settings.model === "auto" && (
+                                <p className="text-xs text-muted-foreground">
+                                    Auto picks the reasoning level for each message.
+                                </p>
+                            )}
+                            <div className="flex items-center space-x-4">
+                                <div className="flex w-36">
+                                    <Label
+                                        htmlFor="topP"
+                                        className="w-full"
+                                    >
+                                        Message Limit
+                                    </Label>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger>
+                                                <InfoIcon className="h-4 w-4 text-gray-500" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-96 overflow-auto">
+                                                    Controls how many
+                                                    previous messages are
+                                                    passed into context.
+                                                    Setting this to 0 means
+                                                    all messages are passed
+                                                    into context. Setting
+                                                    this too high may cause
+                                                    the context window to
+                                                    fill up.
+                                                    <br />
+                                                    <br />
+                                                    <b>Note:</b> Messages
+                                                    outside of the limit are
+                                                    automatically
+                                                    summarized.
+                                                </p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                                <Slider
+                                    id="topP"
+                                    min={0}
+                                    max={20}
+                                    step={1}
+                                    value={[settings.messageLimit]}
+                                    onValueChange={(value) =>
+                                        dispatch({
+                                            type: "SET_MESSAGE_LIMIT",
+                                            payload: value[0]
+                                        })
+                                    }
+                                    className="w-full"
+                                />
+                                <Input
+                                    type="number"
+                                    value={settings.messageLimit}
+                                    onChange={(e) =>
+                                        dispatch({
+                                            type: "SET_MESSAGE_LIMIT",
+                                            payload: Number(e.target.value)
+                                        })
+                                    }
+                                    min={0}
+                                    max={20}
+                                    step={1}
+                                    className="w-20"
+                                />
+                            </div>
+                        </TabsContent>
+                        <TabsContent value="auto" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Auto"
+                                description="How Auto picks a model for each message."
+                            />
+                            <div className="flex items-center space-x-4">
+                                <Label htmlFor="autoRouterModel" className="w-36 shrink-0">
+                                    Auto Router
+                                </Label>
+                                <Select
+                                    value={settings.autoRouterModel}
+                                    onValueChange={(value) =>
+                                        dispatch({
+                                            type: "SET_AUTO_ROUTER_MODEL",
+                                            payload: value as AutoRouterModel
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger id="autoRouterModel" className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(AUTO_ROUTER_MODELS).map(
+                                            ([key, label]) => (
+                                                <SelectItem key={key} value={key}>
+                                                    {label}
+                                                </SelectItem>
+                                            )
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Groq models are free; Luna Decisions is more accurate.
                             </p>
+                            <div className="flex items-center space-x-4">
+                                <Label htmlFor="autoPriority" className="w-36 shrink-0">
+                                    Auto Priority
+                                </Label>
+                                <Select
+                                    value={settings.autoPriority}
+                                    onValueChange={(value) =>
+                                        dispatch({
+                                            type: "SET_AUTO_PRIORITY",
+                                            payload: value as AutoPriority
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger id="autoPriority" className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(AUTO_PRIORITIES).map(
+                                            ([key, label]) => (
+                                                <SelectItem key={key} value={key}>
+                                                    {label}
+                                                </SelectItem>
+                                            )
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Cost favors Luna; Performance uses stronger models sooner.
+                            </p>
+                        </TabsContent>
+                        <TabsContent value="features" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Features"
+                                description="Enabling many features at once can make each less effective. Artifacts, Logic Mode and Memory work best with stronger models."
+                            />
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
@@ -501,11 +536,12 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                     />
                                 </div>
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                    <AccordionItem value="tools">
-                        <AccordionTrigger>Tools</AccordionTrigger>
-                        <AccordionContent>
+                        </TabsContent>
+                        <TabsContent value="tools" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Tools"
+                                description="Which tools the model may call."
+                            />
                             <div className="space-y-4 p-1">
                                 {unsupportedToolUseModels.includes(
                                     settings.model
@@ -623,11 +659,12 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                         </div>
                                     )}
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                    <AccordionItem value="custom-instructions">
-                        <AccordionTrigger>Custom Instructions</AccordionTrigger>
-                        <AccordionContent>
+                        </TabsContent>
+                        <TabsContent value="instructions" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Instructions"
+                                description="Added to the system prompt of every chat."
+                            />
                             <div className="pt-1">
                                 <div
                                     className={`p-1 bg-background rounded-md border relative group overflow-hidden ${
@@ -676,9 +713,9 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                     </div>
                                 </div>
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
+                        </TabsContent>
+                    </div>
+                </Tabs>
             </DialogContent>
         </Dialog>
     );

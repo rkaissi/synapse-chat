@@ -27,7 +27,6 @@ import {
     SparklesIcon,
     PanelLeftIcon,
     PanelRightIcon,
-    ShapesIcon,
     GroupIcon,
     FishSymbolIcon
 } from "lucide-react";
@@ -48,6 +47,20 @@ export const modelInfo: Partial<
         }
     >
 > = {
+    // Listed first: the "Modes" group heads the picker
+    auto: {
+        name: "Auto",
+        description:
+            "Picks the model and reasoning effort for each message.",
+        icon: AutoIcon,
+        provider: ModelProvider.Other
+    },
+    agents: {
+        name: "Agents",
+        description: "A team of specialized agents plans, works and reviews.",
+        icon: MessagesSquareIcon,
+        provider: ModelProvider.Other
+    },
     claudeopus55: {
         name: "Claude Opus 5.5",
         description:
@@ -121,24 +134,6 @@ export const modelInfo: Partial<
         icon: BlendIcon,
         provider: ModelProvider.Groq
     },
-    reasoning: {
-        name: "Reasoning",
-        description: "Custom Reasoning Model.",
-        icon: ShapesIcon,
-        provider: ModelProvider.Other
-    },
-    auto: {
-        name: "Auto",
-        description: "Automatically selects the best model for your task.",
-        icon: AutoIcon,
-        provider: ModelProvider.Other
-    },
-    agents: {
-        name: "Agents",
-        description: "Specialized AI agents that excel at specific tasks.",
-        icon: MessagesSquareIcon,
-        provider: ModelProvider.Other
-    }
 };
 
 interface Props {
@@ -240,7 +235,11 @@ const ChatHeader = ({
                                         ([provider, models], index) => (
                                             <CommandGroup
                                                 key={provider}
-                                                heading={provider}
+                                                heading={
+                                                    provider === ModelProvider.Other
+                                                        ? "Modes"
+                                                        : provider
+                                                }
                                             >
                                                 {index > 0 && (
                                                     <CommandSeparator />

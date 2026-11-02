@@ -8,6 +8,7 @@ import {
     wrapLanguageModel
 } from "ai";
 import {
+    clampReasoning,
     getModel,
     isModelAvailable,
     isReasoningModel,
@@ -22,8 +23,9 @@ import {
     agentsPrompt,
     artifactPrompt,
     DEFAULT_AGENT_SETTINGS,
+    DEFAULT_AUTO_PRIORITY,
+    DEFAULT_AUTO_ROUTER_MODEL,
     DEFAULT_REASONING_LEVEL,
-    keywordCategories,
     maxSteps,
     toolsPrompt
 } from "./config";
@@ -39,35 +41,10 @@ import { getMessageText, inlineTextFileParts } from "@/lib/utils/ui-messages";
 import { findRelevantMemories, extractMemory } from "@/lib/memory";
 import { describeRepo, getRepoSnapshot } from "@/lib/github/repo";
 import { createRepoTools } from "@/lib/github/tools";
+import { routeRequest } from "@/lib/routing/auto-router";
 
 export const maxDuration = 100; // Timeout in seconds
 
-const shouldUseAdvancedModel = (message: string): boolean =>
-    Object.values(keywordCategories).some((category) =>
-        category.some((keyword) => message.toLowerCase().includes(keyword))
-    );
-
-const determineModel = (
-    model: ModelKey,
-    messages: ChatUIMessage[]
-): ModelKey => {
-    const lastMessage =
-        messages
-            .map(getMessageText)
-            .reverse()
-            .find((content) => content) ?? "";
-
-    if (model === "agents") {
-        return "gpt6luna";
-    }
-
-    if (model === "auto") {
-        if (!shouldUseAdvancedModel(lastMessage)) return "gpt6luna";
-        return isModelAvailable("gpt61sol") ? "gpt61sol" : "gpt61terra";
-    }
-
-    return model;
-};
 
 const getToolsToUse = (
     toolChoice: ToolChoice,
@@ -123,7 +100,9 @@ export async function POST(req: Request) {
         enableMemory,
         customInstructions,
         toolChoice,
-        reasoningLevel = DEFAULT_REASONING_LEVEL
+        reasoningLevel = DEFAULT_REASONING_LEVEL,
+        autoRouterModel = DEFAULT_AUTO_ROUTER_MODEL,
+        autoPriority = DEFAULT_AUTO_PRIORITY
     } = settings;
 
     if (!isModelAvailable(model)) {
@@ -133,8 +112,20 @@ export async function POST(req: Request) {
         );
     }
 
-    const modelToUse = determineModel(model, messages);
     const useAgents = model === "agents";
+    // Auto picks the model and reasoning effort per message; Agents runs the
+    // outer chat on Luna
+    const autoRoute =
+        model === "auto"
+            ? await routeRequest(
+                  { messages, repoConnected: !!repo },
+                  autoRouterModel,
+                  autoPriority,
+                  req.signal
+              )
+            : undefined;
+    const modelToUse: ModelKey = autoRoute?.model ?? (useAgents ? "gpt6luna" : model);
+    const reasoning = autoRoute?.reasoning ?? clampReasoning(modelToUse, reasoningLevel);
 
     const { toolChoice: finalToolChoice, tools: toolsToUse } = getToolsToUse(
         toolChoice,
@@ -215,9 +206,7 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
             finalMaxTokens!,
             models[modelToUse].maxTokens ?? finalMaxTokens!
         ),
-        // The custom "reasoning" model has its own thinking budget
-        reasoning:
-            isThinkingModel && modelToUse !== "reasoning" ? reasoningLevel : undefined,
+        reasoning: isThinkingModel ? reasoning : undefined,
         instructions: {
             role: "system",
             content: system + repoPrompt,
@@ -240,6 +229,9 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
             stream: result.stream,
             sendReasoning: true,
             messageMetadata: ({ part }): ChatMetadata | undefined => {
+                if (part.type === "start") {
+                    return { model: useAgents ? "agents" : modelToUse, autoRoute };
+                }
                 if (part.type !== "finish") {
                     return undefined;
                 }

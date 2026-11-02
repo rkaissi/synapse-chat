@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { REASONING_LEVELS, ReasoningLevel } from "@/lib/types";
 
 export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
-    minimal: "Minimal",
     low: "Low",
     medium: "Medium",
     high: "High",
