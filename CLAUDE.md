@@ -24,7 +24,7 @@ There is no test suite. Type-check with `npx tsc --noEmit`.
 
 TypeScript is pinned to `~6.0`: TypeScript 7 drops the compiler API that Next's type-check and `typescript-eslint` need.
 
-Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `BING_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS` (`true` offers the premium models in `expensiveModels`; leave unset on public deployments).
+Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS` (`true` offers the premium models in `expensiveModels`; leave unset on public deployments).
 
 Path alias: `@/*` maps to the repo root.
 
@@ -59,7 +59,7 @@ Large file holding default settings (`DEFAULT_*`), all system prompt fragments (
 - `markdownToHtml` shows unfenced HTML documents and `<style>` blocks as code, so text from models or agents can never restyle the app.
 
 ### Tools
-- Server tool definitions live in `app/api/chat/tools.ts` (`tools` object, AI SDK `tool()` with zod 4 `inputSchema`). `generate_image` stores GPT Image output in MongoDB (`models/image.ts`) and returns a `/api/images/[id]` URL. Weather, Wikipedia and Bing tools are plain `fetch` implementations that keep the old `@agentic/*` names and result shapes (`@agentic` doesn't support AI SDK 5+).
+- Server tool definitions live in `app/api/chat/tools.ts` (`tools` object, AI SDK `tool()` with zod 4 `inputSchema`). `generate_image` stores GPT Image output in MongoDB (`models/image.ts`) and returns a `/api/images/[id]` URL. Weather and Wikipedia tools are plain `fetch` implementations that keep the old `@agentic/*` names and result shapes (`@agentic` doesn't support AI SDK 5+). `web_search` runs OpenAI's hosted web search on GPT-6 Luna (so it works for any chat model) and returns the summary plus sources in Bing's old `webPages` shape; `messages.tsx` also matches the old `bing_web_search` name so saved chats keep their cards.
 - Each tool with custom UI is matched by `toolName` in `components/messages.tsx` and rendered by a card in `components/tools/`. A new tool generally needs: definition in `tools.ts`, rendering branch in `messages.tsx`, and optionally a card component exported from `components/tools/index.tsx`.
 
 ### Agents (`lib/agents/`)

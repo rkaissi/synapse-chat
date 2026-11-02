@@ -67,6 +67,10 @@ const AttachmentModal = dynamic(() => import("./attachmentmodal"), {
     ssr: false
 });
 
+// Chats saved before the switch to OpenAI web search used `bing_web_search`
+const isWebSearch = (toolName: string) =>
+    toolName === "web_search" || toolName === "bing_web_search";
+
 interface MessagesProps {
     messages: CombinedMessage[];
     onArtifactClick: (identifier: string) => void;
@@ -229,19 +233,19 @@ export const AssistantMessage = ({
         if (typeof message === "string" || !message.toolInvocations)
             return null;
 
-        const bingSearchInvocation = message.toolInvocations.find(
-            (tool) => tool.toolName === "bing_web_search"
+        const searchInvocation = message.toolInvocations.find(
+            (tool) => isWebSearch(tool.toolName)
         );
 
         if (
-            !bingSearchInvocation ||
-            bingSearchInvocation.state != "result" ||
-            !bingSearchInvocation.result
+            !searchInvocation ||
+            searchInvocation.state != "result" ||
+            !searchInvocation.result
         )
             return null;
 
         const { webPages, videos, relatedSearches } =
-            bingSearchInvocation.result;
+            searchInvocation.result;
         const sources = [...(webPages?.value || []), ...(videos?.value || [])];
 
         if (sources.length === 0) return null;
@@ -344,20 +348,20 @@ export const AssistantMessage = ({
         if (typeof message === "string" || !message.toolInvocations)
             return null;
 
-        const bingSearchInvocation = message.toolInvocations.find(
-            (tool) => tool.toolName === "bing_web_search"
+        const searchInvocation = message.toolInvocations.find(
+            (tool) => isWebSearch(tool.toolName)
         );
 
         if (
-            !bingSearchInvocation ||
-            bingSearchInvocation.state !== "result" ||
-            !bingSearchInvocation.result ||
-            !bingSearchInvocation.result.images ||
-            !bingSearchInvocation.result.images.value
+            !searchInvocation ||
+            searchInvocation.state !== "result" ||
+            !searchInvocation.result ||
+            !searchInvocation.result.images ||
+            !searchInvocation.result.images.value
         )
             return null;
 
-        const images = bingSearchInvocation.result.images.value;
+        const images = searchInvocation.result.images.value;
 
         if (images.length === 0) return null;
 

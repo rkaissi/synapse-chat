@@ -1,4 +1,5 @@
-import { generateId, generateImage, tool } from "ai";
+import { generateId, generateImage, generateText, tool } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 import { YoutubeTranscript } from "youtube-transcript";
@@ -10,7 +11,7 @@ import {
     summarizeRunForModel
 } from "@/lib/agents/run-state";
 import executeJavaScript from "@/lib/tools/eval";
-import { imageModel } from "@/lib/utils/model-provider";
+import { imageModel, models } from "@/lib/utils/model-provider";
 import dbConnect from "@/lib/db";
 import GeneratedImage from "@/models/image";
 import { artifactExtractionMiddleware } from "./artifact-middleware";
@@ -335,22 +336,44 @@ export const tools = {
             );
         }
     }),
-    bing_web_search: tool({
+    // Runs OpenAI's hosted web search on a cheap model so it works for every
+    // chat model. Costs about $10 per 1,000 searches plus tokens (see roadmap).
+    web_search: tool({
         description:
-            "Searches the web using the Bing search engine to return the most relevant web pages for a given query. Can also be used to find up-to-date news and information about many topics.",
+            "Searches the web and returns a summary of the findings with the source pages. Use it for up-to-date news and information about many topics. Cite sources as markdown links to their URLs.",
         inputSchema: z.object({
             q: z.string().describe("search query")
         }),
-        execute: async ({ q }) => {
-            const url = new URL("https://api.bing.microsoft.com/v7.0/search");
-            url.searchParams.set("q", q);
-            url.searchParams.set("mkt", "en-US");
-            const { rankingResponse, ...result } = await fetchJson(url, {
-                headers: {
-                    "Ocp-Apim-Subscription-Key": process.env.BING_API_KEY ?? ""
-                }
+        execute: async ({ q }, { abortSignal }) => {
+            const result = await generateText({
+                model: openai.responses(models.gpt6luna.model),
+                tools: { web_search: openai.tools.webSearch() },
+                toolChoice: { type: "tool", toolName: "web_search" },
+                providerOptions: { openai: { reasoningEffort: "low" } },
+                prompt: `Search the web for: ${q}\n\nReport what the sources say, keeping key facts, figures, dates and names. Be concise and cite the sources.`,
+                abortSignal
             });
-            return result;
+            const { sources } = result;
+            // OpenAI tags every cited URL with ?utm_source=openai
+            const text = result.text.replace(/[?&]utm_source=openai(?=[)\s&]|$)/g, "");
+            // `sources` lists every page the search opened (often 30+, no
+            // titles), so show the pages the answer cites, as [domain](url)
+            const cited = [...text.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map(
+                (match) => match[1]
+            );
+            const urls = cited.length
+                ? cited
+                : sources
+                      .flatMap((source) =>
+                          source.sourceType === "url" ? [source.url] : []
+                      )
+                      .slice(0, 6);
+            const pages = [...new Set(urls)].map((url) => ({
+                name: new URL(url).hostname.replace(/^www\./, ""),
+                url
+            }));
+            // webPages keeps the shape the Sources card reads (from Bing)
+            return { query: q, answer: text, webPages: { value: pages } };
         }
     })
 };
