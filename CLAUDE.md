@@ -31,7 +31,7 @@ Path alias: `@/*` maps to the repo root.
 ## Architecture
 
 ### Chat request flow
-1. `components/chat.tsx` uses `useChat` (`@ai-sdk/react`) with a `DefaultChatTransport`; `userId` and `settings` are sent per request via `sendMessage(..., { body })` / `regenerate({ body })`. Input state is owned by the component (useChat no longer provides it).
+1. `components/chat.tsx` uses `useChat` (`@ai-sdk/react`) with a `DefaultChatTransport`; `settings` and the connected `repo` are sent per request via `sendMessage(..., { body })` / `regenerate({ body })`; the user comes from a cookie (see Users). Input state is owned by the component (useChat no longer provides it).
 2. The route resolves the model (`"auto"` (the default) calls `routeRequest` in `lib/routing/auto-router.ts`, which picks the model and reasoning effort; `"agents"` runs the outer chat on `gpt6luna` with `DEFAULT_AGENT_SETTINGS`), selects tools (`getToolsToUse`), trims history (`lib/utils/message-manager.ts`), optionally pulls memories, builds the system prompt, and streams `streamText` through `toUIMessageStream` + `createUIMessageStreamResponse`. The system prompt is passed as `instructions` (with Anthropic cache control); AI SDK 7 rejects system messages inside `messages`.
 3. Reasoning arrives as UI message `reasoning` parts; token usage and finish reason are attached as message metadata (`ChatMetadata` in `lib/types`) on the `finish` part.
 4. Chats are persisted from the client via `lib/utils/save-chat.ts` → `app/api/save`; loaded via `app/api/chat/[id]` and listed via `app/api/chats`. Only `/chat/[id]` loads a chat from the database; the home page passes `isNewChat` (the URL is unreliable right after "New chat"). Saves are triggered by `shouldSaveRef` + an effect on `status`, not directly in `onFinish`. `useChat` is throttled (50 ms), and streamed messages are processed in a `requestAnimationFrame`, not directly in the effect: setting state from the effect on every update chained re-renders past React's nested update limit with long artifacts. The save on finish also waits a frame so the last update is processed first.
@@ -77,6 +77,9 @@ When `enableMemory` is on, `findRelevantMemories` embeds the last user message (
 
 ### GitHub repositories (`lib/github/`)
 `/api/github` parses the URL and downloads one commit as a tarball into an in-memory cache (`repo.ts`). The client stores the returned `RepoConnection`, sends it as `repo` in each chat request and saves it on the chat document. The chat route then adds `repo_list_files` / `repo_read_file` / `repo_search` (`tools.ts`) and a short overview to the system prompt, pinned to the connected commit.
+
+### Users
+There is no sign-in yet. `proxy.ts` (Next 16's middleware) gives every browser a random UUID in the httpOnly `synapse_uid` cookie; server code gets it with `getUserId()` (`lib/user.ts`) and never trusts a user ID from the client. `/api/chats`, `/api/chat/[id]` and `/api/save` only list, return or overwrite the cookie owner's chats (`public` chats can be read by anyone). Settings → Account shows the ID (`/api/user`). Chats saved before this used the fixed ID `"1"`, which is no longer accepted; `npm run claim-legacy-chats -- <browser-id>` moves them to a browser.
 
 ### Data
 Mongoose models in `models/` (`chat`, `user`, `artifact`). `lib/db/index.ts` provides a cached `dbConnect()`; call it in API routes before querying. Models are cached across hot reloads, so restart the dev server after schema changes.

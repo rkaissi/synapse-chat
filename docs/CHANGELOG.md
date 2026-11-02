@@ -2,6 +2,17 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Separate users per browser
+
+Everyone used to be the same user (`userId = "1"`, hardcoded in the pages), so on a shared deployment every visitor would see and could overwrite everyone's chats and memories.
+
+- Each browser now gets an anonymous ID on its first visit: a random UUID in an httpOnly cookie (`synapse_uid`, about 13 months), set by `proxy.ts`. A cookie rather than the IP address, since people on one network share an IP and phones change IPs.
+- The server reads the user from the cookie and ignores any user ID in requests. `/api/chats` lists only the browser's chats; `/api/chat/[id]` returns 404 for another browser's chat (unless it's public); `/api/save` refuses (403) to overwrite another browser's chat; the chat page title and published artifacts use the cookie user too.
+- **Settings → Account** shows the browser ID and explains that chats are tied to the browser.
+- **Existing chats**: everything saved before this belongs to the old ID `"1"`, which browsers can't use. `npm run claim-legacy-chats -- <browser-id>` moves those chats, published artifacts, memories and settings to a browser ID (`--dry-run` shows the counts first). Nothing is deleted.
+
+Tested with two cookie jars: separate IDs; a fresh browser sees no chats; reading another browser's chat or a legacy chat gives 404; overwriting gives 403; requests without a cookie get a new ID. The dry run found 794 chats and 30 memories under `"1"`.
+
 ## 2026-11-01 — Smarter Auto, reasoning level for every model
 
 ### Auto routing (now the default model)

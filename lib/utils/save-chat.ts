@@ -1,8 +1,8 @@
 import { CombinedMessage, RepoConnection, Settings } from "@/lib/types";
 import toast from "react-hot-toast";
 
+// The user is identified by the browser's cookie (proxy.ts)
 const saveChat = async (
-    userId: string,
     chatId: string,
     chatName: string,
     messages: CombinedMessage[],
@@ -21,7 +21,6 @@ const saveChat = async (
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                userId,
                 chatId,
                 chatName,
                 messages,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Chat from "@/models/chat";
 import User from "@/models/user";
+import { getUserId } from "@/lib/user";
 
 export async function POST(req: Request) {
     try {
@@ -18,10 +19,17 @@ export async function POST(req: Request) {
             );
         }
 
-        const { userId, chatId, chatName, messages, settings, repo } = body;
+        const { chatId, chatName, messages, settings, repo } = body;
+        // The user comes from the browser's cookie, never from the body
+        const userId = await getUserId();
+        if (!userId) {
+            return NextResponse.json(
+                { success: false, error: "Missing user cookie" },
+                { status: 401 }
+            );
+        }
 
         if (
-            !userId ||
             !chatId ||
             !messages ||
             !Array.isArray(messages) ||
@@ -34,6 +42,15 @@ export async function POST(req: Request) {
                     error: "Invalid request format"
                 },
                 { status: 400 }
+            );
+        }
+
+        // Chats can only be saved by the browser that created them
+        const existing = await Chat.findById(chatId).select("userId").lean<{ userId: string }>();
+        if (existing && existing.userId !== userId) {
+            return NextResponse.json(
+                { success: false, error: "Chat belongs to another user" },
+                { status: 403 }
             );
         }
 

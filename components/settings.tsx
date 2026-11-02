@@ -55,6 +55,7 @@ import {
     ScrollText,
     SlidersHorizontal,
     ToggleRight,
+    UserRound,
     Waypoints,
     Wrench
 } from "lucide-react";
@@ -81,7 +82,8 @@ const SECTIONS = [
     { value: "auto", label: "Auto", icon: Waypoints },
     { value: "features", label: "Features", icon: ToggleRight },
     { value: "tools", label: "Tools", icon: Wrench },
-    { value: "instructions", label: "Instructions", icon: ScrollText }
+    { value: "instructions", label: "Instructions", icon: ScrollText },
+    { value: "account", label: "Account", icon: UserRound }
 ];
 
 const SectionHeading = ({
@@ -102,6 +104,17 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
     const maxPossibleOutput = models[settings.model].maxTokens || 128000;
     const [toolChoice, setToolChoice] = useState<ToolChoice>(settings.toolChoice);
     const [openCombobox, setOpenCombobox] = useState(false);
+
+    // This browser's anonymous user ID (Account section)
+    const [userId, setUserId] = useState<string | null>(null);
+    const [copiedId, setCopiedId] = useState(false);
+    useEffect(() => {
+        if (!isOpen || userId) return;
+        fetch("/api/user")
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => setUserId(data?.userId ?? null))
+            .catch(() => {});
+    }, [isOpen, userId]);
     const [selectedTool, setSelectedTool] = useState<string>(
         typeof settings.toolChoice === "object"
             ? settings.toolChoice.toolName
@@ -711,6 +724,34 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                             }
                                         </span>
                                     </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+                        <TabsContent value="account" className="mt-0 space-y-4">
+                            <SectionHeading
+                                title="Account"
+                                description="There's no sign-in yet: your chats and memories are tied to this browser. Another browser or device starts fresh, and clearing site data loses access to them."
+                            />
+                            <div className="space-y-1.5">
+                                <Label>Browser ID</Label>
+                                <div className="flex items-center gap-2">
+                                    <code className="min-w-0 flex-1 truncate rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                                        {userId ?? "Loading…"}
+                                    </code>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={!userId}
+                                        onClick={() => {
+                                            if (!userId) return;
+                                            navigator.clipboard.writeText(userId);
+                                            setCopiedId(true);
+                                            setTimeout(() => setCopiedId(false), 2000);
+                                        }}
+                                    >
+                                        {copiedId ? "Copied" : "Copy"}
+                                    </Button>
                                 </div>
                             </div>
                         </TabsContent>

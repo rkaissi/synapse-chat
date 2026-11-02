@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { NEW_CHAT_EVENT } from "@/lib/utils/new-chat";
 
 export default function Page() {
-    const userId = "1";
     // Stable for the lifetime of the page (a new id per render would split the chat)
     const [chatId, setChatId] = useState(() => generateId());
 
@@ -18,5 +17,5 @@ export default function Page() {
         return () => window.removeEventListener(NEW_CHAT_EVENT, startNewChat);
     }, []);
 
-    return <Chat key={chatId} userId={userId} chatId={chatId} isNewChat />;
+    return <Chat key={chatId} chatId={chatId} isNewChat />;
 }
