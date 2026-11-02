@@ -21,7 +21,9 @@ interface Props {
     handleStop: () => void;
     enablePasteToFile: boolean;
     disabled?: boolean;
-    // Extra controls shown inside the input, left of the send button
+    // Extra controls shown inside the input: left (after the attach button)
+    // and right (before the send button)
+    leftControls?: React.ReactNode;
     controls?: React.ReactNode;
 }
 
@@ -38,6 +40,7 @@ const ChatFooter = ({
     handleStop,
     enablePasteToFile,
     disabled = false,
+    leftControls,
     controls
 }: Props) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -322,15 +325,6 @@ const ChatFooter = ({
                             {Array.from(files).map(renderFilePreview)}
                         </div>
                     )}
-                    <Button
-                        size="icon"
-                        className="absolute w-8 h-8 bottom-2 left-3 rounded-full z-10 bg-black cursor-pointer flex items-center justify-center"
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        <PaperclipIcon className="w-4 h-4 text-primary-foreground" />
-                        <span className="sr-only">Attach File</span>
-                    </Button>
                     <input
                         id="file-upload"
                         type="file"
@@ -343,51 +337,59 @@ const ChatFooter = ({
                     <div
                         className={`${
                             isMultiline ? "rounded-2xl" : "rounded-full"
-                        } border border-neutral-400 shadow-xs bg-grey-100 w-full flex items-center min-h-[48px] max-h-[136px] overflow-hidden z-10`}
+                        } border border-neutral-400 shadow-xs bg-grey-100 w-full flex items-end min-h-[48px] max-h-[136px] overflow-hidden`}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleDrop}
                     >
-                        <div className="shrink-0 w-12 h-full" />
+                        <div className="flex shrink-0 items-center gap-1 py-2 pl-3">
+                            <Button
+                                size="icon"
+                                className="w-8 h-8 rounded-full bg-black cursor-pointer flex items-center justify-center"
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <PaperclipIcon className="w-4 h-4 text-primary-foreground" />
+                                <span className="sr-only">Attach File</span>
+                            </Button>
+                            {leftControls}
+                        </div>
                         <textarea
                             ref={textareaRef}
                             placeholder="Message Assistant"
                             name="message"
                             id="message"
-                            className="resize-none py-3 px-1 m-0 w-full focus:outline-hidden bg-transparent border-none z-10"
+                            className="resize-none py-3 px-2 m-0 w-full min-w-0 focus:outline-hidden bg-transparent border-none"
                             value={input}
                             onChange={handleTextareaChange}
                             onKeyDown={handleKeyDown}
                             onPaste={handlePaste}
                             rows={1}
                         />
-                        <div className={`shrink-0 h-full ${controls ? "w-40" : "w-12"}`} />
-                    </div>
-                    {controls && (
-                        <div className="absolute bottom-2 right-12 z-10">
+                        <div className="flex shrink-0 items-center gap-1 py-2 pr-3">
                             {controls}
+                            <Button
+                                type={isLoading ? "button" : "submit"}
+                                size="icon"
+                                disabled={
+                                    disabled ||
+                                    (!isLoading &&
+                                        input.length === 0 &&
+                                        (!files || files.length === 0))
+                                }
+                                className="w-8 h-8 rounded-full items-center justify-center"
+                                onClick={handleStop}
+                            >
+                                {isLoading ? (
+                                    <StopIcon className="w-4 h-4 text-primary-foreground" />
+                                ) : (
+                                    <ArrowUpIcon className="w-4 h-4 text-primary-foreground" />
+                                )}
+                                <span className="sr-only">
+                                    {isLoading ? "Stop" : "Send"}
+                                </span>
+                            </Button>
                         </div>
-                    )}
-                    <Button
-                        type={isLoading ? "button" : "submit"}
-                        size="icon"
-                        disabled={
-                            disabled ||
-                            (!isLoading &&
-                                input.length === 0 &&
-                                (!files || files.length === 0))
-                        }
-                        className="absolute w-8 h-8 bottom-2 right-3 rounded-full items-center justify-center z-10"
-                        onClick={handleStop}
-                    >
-                        {isLoading ? (
-                            <StopIcon className="w-4 h-4 text-primary-foreground" />
-                        ) : (
-                            <ArrowUpIcon className="w-4 h-4 text-primary-foreground" />
-                        )}
-                        <span className="sr-only">
-                            {isLoading ? "Stop" : "Send"}
-                        </span>
-                    </Button>
+                    </div>
                 </form>
             </div>
         </>

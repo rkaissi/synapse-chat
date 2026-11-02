@@ -126,6 +126,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const isStreamingArtifactRef = useRef(false);
+    // Follow new output only while the reader is at the bottom (like Claude
+    // and Codex), see handleMessagesScroll
+    const followOutputRef = useRef(true);
     const lastProcessedMessageRef = useRef<ChatUIMessage | null>(null);
     // Messages restored from the database are already processed and must not be
     // re-run through processMessage (it would apply the current settings to them)
@@ -177,6 +180,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
     const addMessage = (message: NewMessage) => {
         shouldSaveRef.current = true;
+        followOutputRef.current = true;
         sendMessage({ text: message.content }, requestOptions);
     };
 
@@ -189,6 +193,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             return;
         }
         shouldSaveRef.current = true;
+        followOutputRef.current = true;
         sendMessage({ text: input, files }, requestOptions);
         setInput("");
     };
@@ -549,8 +554,19 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         }
     }, []);
 
+    // Scrolling up stops following, scrolling back down or
+    // sending a message resumes it. Artifact streaming never moves the chat.
+    const handleMessagesScroll = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        followOutputRef.current =
+            container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+    }, []);
+
     useLayoutEffect(() => {
-        scrollToBottom();
+        if (followOutputRef.current && !isStreamingArtifactRef.current) {
+            scrollToBottom();
+        }
     }, [combinedMessages, scrollToBottom]);
 
     const updateRepo = (connection: RepoConnection | null) => {
@@ -600,13 +616,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             isSidebarOpen={isSidebarOpen}
                             onSidebarOpenChange={setIsSidebarOpen}
                         />
-                        <GitHubRepoSelector
-                            connection={repo}
-                            onConnect={updateRepo}
-                            onDisconnect={() => updateRepo(null)}
-                        />
                         <div
                             ref={messagesContainerRef}
+                            onScroll={handleMessagesScroll}
                             className="grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
                         >
                             <div className="shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
@@ -649,6 +661,13 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             }}
                             enablePasteToFile={state.enablePasteToFile}
                             disabled={!!error}
+                            leftControls={
+                                <GitHubRepoSelector
+                                    connection={repo}
+                                    onConnect={updateRepo}
+                                    onDisconnect={() => updateRepo(null)}
+                                />
+                            }
                             controls={
                                 (isReasoningModel(state.model) ||
                                     state.model === "auto" ||

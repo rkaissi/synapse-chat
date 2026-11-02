@@ -14,7 +14,7 @@ import {
     DEFAULT_TOOL_CHOICE,
     DEFAULT_TOPP
 } from "@/app/api/chat/config";
-import { models } from "@/lib/utils/model-provider";
+import { isModelAvailable, models } from "@/lib/utils/model-provider";
 import { Settings } from "@/lib/types";
 
 // User preferences (chat settings and the desktop sidebar state), kept in
@@ -61,8 +61,10 @@ const read = (): Preferences => {
         // Corrupt or unavailable storage: fall back to the defaults
     }
     const settings = { ...DEFAULT_PREFERENCES.settings, ...stored.settings };
-    // A stored model may have been removed since
-    if (!(settings.model in models)) settings.model = DEFAULT_MODEL;
+    // A stored model may have been removed or disabled since
+    if (!(settings.model in models) || !isModelAvailable(settings.model)) {
+        settings.model = DEFAULT_MODEL;
+    }
     cache = {
         settings,
         sidebarOpen: stored.sidebarOpen ?? DEFAULT_PREFERENCES.sidebarOpen

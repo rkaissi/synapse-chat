@@ -212,34 +212,14 @@ export function ArtifactsWindow({
         }
     }, [currentArtifact, setActiveTab]);
 
+    // The iframe element changes with the artifact and tab, so re-subscribe then
     useEffect(() => {
         if (iframeRef.current && currentArtifact?.type === "text/html") {
-            const iframe = iframeRef.current;
-            const captureConsole = () => {
-                captureConsoleLogs(iframe, (log) => {
-                    setConsoleLogs((prev) => [...prev, log]);
-                });
-            };
-
-            if (iframe.contentDocument?.readyState === "complete") {
-                captureConsole();
-            } else {
-                iframe.addEventListener("load", captureConsole);
-            }
-
-            return () => {
-                iframe.removeEventListener("load", captureConsole);
-            };
+            return captureConsoleLogs(iframeRef.current, (log) => {
+                setConsoleLogs((prev) => [...prev, log]);
+            });
         }
-    }, [
-        currentArtifact,
-        currentArtifactIndex,
-        activeTab,
-        consoleLogs,
-        setConsoleLogs,
-        artifacts,
-        isOpen
-    ]);
+    }, [currentArtifact, currentArtifactIndex, activeTab, setConsoleLogs, isOpen]);
 
     const renderCode = useCallback((artifact: Artifact) => {
         const language =

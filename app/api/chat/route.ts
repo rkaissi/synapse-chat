@@ -9,6 +9,7 @@ import {
 } from "ai";
 import {
     getModel,
+    isModelAvailable,
     isReasoningModel,
     ModelKey,
     models,
@@ -61,7 +62,8 @@ const determineModel = (
     }
 
     if (model === "auto") {
-        return shouldUseAdvancedModel(lastMessage) ? "gpt61sol" : "gpt6luna";
+        if (!shouldUseAdvancedModel(lastMessage)) return "gpt6luna";
+        return isModelAvailable("gpt61sol") ? "gpt61sol" : "gpt61terra";
     }
 
     return model;
@@ -123,6 +125,13 @@ export async function POST(req: Request) {
         toolChoice,
         reasoningLevel = DEFAULT_REASONING_LEVEL
     } = settings;
+
+    if (!isModelAvailable(model)) {
+        return Response.json(
+            { error: `${models[model]?.name ?? model} is not enabled on this deployment` },
+            { status: 403 }
+        );
+    }
 
     const modelToUse = determineModel(model, messages);
     const useAgents = model === "agents";

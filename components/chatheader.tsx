@@ -32,7 +32,7 @@ import {
     FishSymbolIcon
 } from "lucide-react";
 import { AutoIcon, SparkleIcon, ZapIcon } from "./icons";
-import { ModelKey, ModelProvider } from "@/lib/utils/model-provider";
+import { isModelAvailable, ModelKey, ModelProvider } from "@/lib/utils/model-provider";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { dispatchNewChat } from "@/lib/utils/new-chat";
@@ -175,7 +175,8 @@ const ChatHeader = ({
 
     const groupedModels = useMemo(() => {
         return Object.entries(modelInfo).reduce((acc, [key, value]) => {
-            if (value) {
+            // Premium models are hidden unless enabled (see isModelAvailable)
+            if (value && isModelAvailable(key as ModelKey)) {
                 const provider = value.provider;
                 if (!acc[provider]) {
                     acc[provider] = [];

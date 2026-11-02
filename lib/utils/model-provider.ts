@@ -229,3 +229,21 @@ export const reasoningModels: Partial<ModelKey>[] = [
 export const isReasoningModel = (modelKey: ModelKey): boolean => {
     return reasoningModels.includes(modelKey);
 };
+
+// Premium models are only offered when NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS is
+// "true" (set it locally; leave it unset on a public deployment). The flag is
+// public because the model picker needs it; the chat route enforces it too.
+export const expensiveModels: ModelKey[] = [
+    "gpt6astra",
+    "gpt61sol",
+    "gptLatest",
+    "claudefable51",
+    "claudeopus55",
+    "reasoning"
+];
+
+export const expensiveModelsEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS === "true";
+
+export const isModelAvailable = (modelKey: ModelKey): boolean =>
+    expensiveModelsEnabled || !expensiveModels.includes(modelKey);

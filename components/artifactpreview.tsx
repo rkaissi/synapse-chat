@@ -1,3 +1,4 @@
+import { withConsoleBridge } from "@/lib/utils/capture-logs";
 import { Artifact } from "@/lib/types";
 import { memo } from "react";
 import dynamic from "next/dynamic";
@@ -60,14 +61,16 @@ const PreviewComponent = ({
             return (
                 <iframe
                     ref={iframeRef}
-                    srcDoc={artifact.content}
+                    srcDoc={withConsoleBridge(artifact.content || "")}
                     style={{
                         width: "100%",
                         height: "100%",
                         border: "none"
                     }}
                     title={artifact.title || "Preview"}
-                    sandbox="allow-scripts allow-same-origin"
+                    // No allow-same-origin: with it, artifact scripts could
+                    // reach window.parent and modify the app
+                    sandbox="allow-scripts allow-forms allow-modals allow-popups"
                 />
             );
         case "application/react":

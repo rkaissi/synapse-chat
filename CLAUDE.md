@@ -24,7 +24,7 @@ There is no test suite. Type-check with `npx tsc --noEmit`.
 
 TypeScript is pinned to `~6.0`: TypeScript 7 drops the compiler API that Next's type-check and `typescript-eslint` need.
 
-Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `BING_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_URL`.
+Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `BING_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_URL`, `NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS` (`true` offers the premium models in `expensiveModels`; leave unset on public deployments).
 
 Path alias: `@/*` maps to the repo root.
 
@@ -52,6 +52,8 @@ Large file holding default settings (`DEFAULT_*`), all system prompt fragments (
 - `app/api/chat/artifact-middleware.ts` exports `extractArtifacts()`, which replaces each artifact with an `[ARTIFACT:<identifier>]` placeholder and handles incomplete (still-streaming) artifacts. It is used both server-side (middleware, non-streaming only) and **client-side** in `components/chat.tsx` during streaming.
 - `components/artifactswindow.tsx` displays artifacts; `components/reactrenderer.tsx` executes React artifacts with `react-runner`, injecting a scope of React, Recharts, lucide/radix icons, shadcn components (`components/ui`), and mathjs. Artifact code may only use libraries present in that scope.
 - Published artifacts are stored via `app/api/artifacts` and viewed at `app/artifacts/[id]`.
+- HTML artifacts run in an iframe sandboxed **without** `allow-same-origin` (so they can't reach the app); console output comes through a `postMessage` bridge injected into the document (`lib/utils/capture-logs.ts`). Don't add `allow-same-origin` back.
+- `markdownToHtml` shows unfenced HTML documents and `<style>` blocks as code, so text from models or agents can never restyle the app.
 
 ### Tools
 - Server tool definitions live in `app/api/chat/tools.ts` (`tools` object, AI SDK `tool()` with zod 4 `inputSchema`). `generate_image` stores GPT Image output in MongoDB (`models/image.ts`) and returns a `/api/images/[id]` URL. Weather, Wikipedia and Bing tools are plain `fetch` implementations that keep the old `@agentic/*` names and result shapes (`@agentic` doesn't support AI SDK 5+).

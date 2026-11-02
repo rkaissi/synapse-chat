@@ -2,6 +2,16 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Artifact isolation, chat scrolling, compact repo control
+
+- **An HTML artifact restyled the whole app** (a green border and changed margins after an agents run built a Snake game). Two causes, both fixed without removing anything from the artifact:
+  - The Debugger agent returned the whole page as plain text, and messages/agent results were rendered as HTML, so the page's `<style>` applied to the app. HTML documents and `<style>` blocks outside code blocks are now shown as code (`fenceRawHtml` in `lib/utils/markdown-to-html.ts`, also while streaming). The live version is in the artifact preview.
+  - The HTML preview iframe allowed `allow-scripts` together with `allow-same-origin`, which lets artifact scripts reach the app through `window.parent`. It now runs without `allow-same-origin` (an opaque origin, as on claude.ai), and console output is forwarded by a script placed inside the artifact (`lib/utils/capture-logs.ts`). Artifacts render exactly as before; they just can't touch the app. One side effect: an artifact's `localStorage` is unavailable, so e.g. a game's best score isn't kept.
+- **The console capture leaked listeners**: its cleanup was never called and the effect re-ran on every new log line, so each log added another listener.
+- **The chat was locked to the bottom while anything streamed.** It now follows new output only while you're at the bottom: scrolling up stops following, scrolling back to the bottom or sending a message resumes it, and a streaming artifact never moves the chat.
+- **The GitHub connect bar is now a button in the message box.** It opens a small popover to connect; once connected it shows the repository as a chip (details and Disconnect in the popover). The full-width bar above the chat is gone.
+- **`NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS`**: GPT-6 Astra, GPT-6.1 Sol, Claude Fable 5.1, Claude Opus 5.5 and Reasoning are only offered when it is `true`. Leave it unset on a public deployment: the picker hides them, the chat route rejects them (403), saved preferences fall back to the default, and Auto's heavy path uses GPT-6.1 Terra instead of Sol.
+
 ## 2026-11-01 — Reasoning level, persistent settings, agent fixes
 
 ### Agents
