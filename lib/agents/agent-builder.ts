@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { openai } from "@ai-sdk/openai";
 import {
     getModel,
     ModelConfig,
+    ModelProvider,
     models,
     reasoningModels
 } from "@/lib/utils/model-provider";
@@ -32,6 +34,7 @@ interface Agent {
     temperature: number;
     maxTokens: number;
     reasoning: ReasoningLevel;
+    webSearch: boolean;
     schema: z.ZodType<any>;
     execute: (
         prompt: string,
@@ -450,8 +453,15 @@ export class AgentBuilder {
         maxTokens: number;
         // Reasoning effort for reasoning models (default: high)
         reasoning?: ReasoningLevel;
+        // OpenAI's hosted web search (OpenAI models only). It runs inside the
+        // same response, so structured output still takes one call
+        webSearch?: boolean;
         schema: z.ZodType<any>;
     }): Agent {
+        const webSearch = config.webSearch ?? false;
+        if (webSearch && config.model.provider !== ModelProvider.OpenAI) {
+            throw new Error(`${config.name}: web search needs an OpenAI model`);
+        }
         return {
             name: config.name,
             description: config.description,
@@ -460,6 +470,7 @@ export class AgentBuilder {
             temperature: config.temperature,
             maxTokens: config.maxTokens,
             reasoning: config.reasoning ?? "high",
+            webSearch,
             schema: config.schema,
             execute: async (
                 prompt: string,
@@ -487,6 +498,9 @@ export class AgentBuilder {
                             reasoning: isReasoning ? config.reasoning : undefined,
                             maxOutputTokens,
                             prompt: fullPrompt,
+                            tools: webSearch
+                                ? { web_search: openai.tools.webSearch() }
+                                : undefined,
                             abortSignal,
                             output: Output.object({ schema: config.schema }),
                             providerOptions: { openai: { strictJsonSchema: false } }
