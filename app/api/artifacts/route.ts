@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
             ...artifactData,
             userId: (await getUserId()) ?? "anonymous"
         });
-        const shareableURL = `${process.env.NEXT_PUBLIC_URL}/artifacts/${artifact._id}`;
+        // The address this request came to, so links work on localhost,
+        // preview deployments, production and custom domains alike
+        const shareableURL = `${req.nextUrl.origin}/artifacts/${artifact._id}`;
         artifact.shareableURL = shareableURL;
         await artifact.save();
 

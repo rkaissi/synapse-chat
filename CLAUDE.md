@@ -24,7 +24,7 @@ There is no test suite. Type-check with `npx tsc --noEmit`.
 
 TypeScript is pinned to `~6.0`: TypeScript 7 drops the compiler API that Next's type-check and `typescript-eslint` need.
 
-Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `BING_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_URL`, `NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS` (`true` offers the premium models in `expensiveModels`; leave unset on public deployments).
+Environment: copy `.env.example` to `.env.local`. Keys used: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `BING_API_KEY`, `WEATHER_API_KEY`, `MONGODB_URI` (falls back to `mongodb://localhost:27017/ChatbotDB`), `GITHUB_ACCESS_TOKEN`, `NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS` (`true` offers the premium models in `expensiveModels`; leave unset on public deployments).
 
 Path alias: `@/*` maps to the repo root.
 

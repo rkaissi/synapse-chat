@@ -2,6 +2,11 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Vercel deployment prep
+
+- **Published artifact links no longer need `NEXT_PUBLIC_URL`.** The link is built from the address the request came to, so it's right on localhost, Vercel preview deployments, production and custom domains. The variable was the only use and would have pointed live links at `localhost` when set to the local value. It's removed from `.env.example`.
+- `.gitignore` ignores the `.vercel` project link and `.env*` files (added by `vercel link`), with `.env.example` kept tracked.
+
 ## 2026-11-02 — Separate users per browser
 
 Everyone used to be the same user (`userId = "1"`, hardcoded in the pages), so on a shared deployment every visitor would see and could overwrite everyone's chats and memories.
