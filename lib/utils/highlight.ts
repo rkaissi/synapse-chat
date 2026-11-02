@@ -4,39 +4,58 @@ import hljs from "highlight.js";
 hljs.registerAliases(["latex", "tex", "math"], { languageName: "latex" });
 hljs.registerAliases(["racket", "scheme"], { languageName: "scheme" });
 
-// Cache for highlighted code
-const highlightCache = new Map<string, string>();
+// Language detected for each unknown language name, so auto-detection (which
+// tries every language) runs once per name, not on every streamed update
+const detectedLanguages = new Map<string, string>();
 
-export const highlightCode = (code: string, language: string) => {
-    // Check if the language exists in highlight.js
-    const isLanguageSupported = hljs.getLanguage(language) !== undefined;
-    let value;
+// Recent results. Streaming re-renders the same code blocks many times, and
+// the artifact window re-renders its code on every chat update
+const MAX_CACHED_RESULTS = 64;
+const resultCache = new Map<string, { value: string; language: string }>();
 
+const highlight = (code: string, language: string) => {
     try {
-        if (isLanguageSupported) {
-            value = hljs.highlight(code, { language }).value;
-        } else if (highlightCache.has(language)) {
-            // If we've seen this unknown language before, use the cached detection
-            language = highlightCache.get(language)!;
-            value = hljs.highlight(code, { language }).value;
-        } else {
-            // For unknown languages, use auto-detection
-            const highlight = hljs.highlightAuto(code);
-            value = highlight.value;
-
-            if (highlight.language) {
-                language = highlight.language;
-                highlightCache.set(language, highlight.language);
-            } else {
-                // If auto-detection fails, fallback to plaintext
-                language = "plaintext";
-                value = hljs.highlight(code, { language }).value;
-            }
+        if (hljs.getLanguage(language)) {
+            return { value: hljs.highlight(code, { language }).value, language };
         }
-    } catch (error) {
-        language = "plaintext";
-        value = hljs.highlight(code, { language }).value;
+
+        const detected = detectedLanguages.get(language);
+        if (detected) {
+            return {
+                value: hljs.highlight(code, { language: detected }).value,
+                language: detected
+            };
+        }
+
+        const result = hljs.highlightAuto(code);
+        if (result.language) {
+            detectedLanguages.set(language, result.language);
+            return { value: result.value, language: result.language };
+        }
+    } catch {
+        // Fall back to plaintext below
     }
 
-    return { value, language };
+    return {
+        value: hljs.highlight(code, { language: "plaintext" }).value,
+        language: "plaintext"
+    };
+};
+
+export const highlightCode = (code: string, language: string) => {
+    const key = `${language}\u0000${code}`;
+    const cached = resultCache.get(key);
+    if (cached) {
+        // Move to the end so the least recently used result is evicted first
+        resultCache.delete(key);
+        resultCache.set(key, cached);
+        return cached;
+    }
+
+    const result = highlight(code, language);
+    resultCache.set(key, result);
+    if (resultCache.size > MAX_CACHED_RESULTS) {
+        resultCache.delete(resultCache.keys().next().value!);
+    }
+    return result;
 };

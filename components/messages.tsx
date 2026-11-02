@@ -1,5 +1,12 @@
 import { AUTO_ROUTER_MODELS, CombinedMessage, NewMessage } from "@/lib/types";
-import { useCallback, useMemo, useState } from "react";
+import {
+    memo,
+    useCallback,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
 import {
     Avatar,
     AvatarFallback,
@@ -87,23 +94,70 @@ export const Messages = ({
     addMessage,
     isStreaming = false
 }: MessagesProps) => {
+    const elementsRef = useRef(new Map<string, HTMLDivElement>());
+
+    // Off-screen messages skip layout and paint (`content-visibility: auto`),
+    // which keeps long chats responsive. The latest exchange always renders.
+    // The placeholder size is each message's measured height (a fixed guess
+    // made a loaded chat's scroll height jump), and all heights are read
+    // before any style is written, so this costs one layout, not one per
+    // message
+    useLayoutEffect(() => {
+        const toEnable: HTMLDivElement[] = [];
+        const toDisable: HTMLDivElement[] = [];
+        messages.forEach((message, index) => {
+            const element = elementsRef.current.get(message.id);
+            if (!element) return;
+            const enabled = index < messages.length - 2;
+            const isEnabled = element.style.contentVisibility === "auto";
+            if (enabled && !isEnabled) toEnable.push(element);
+            if (!enabled && isEnabled) toDisable.push(element);
+        });
+
+        const heights = toEnable.map((element) => element.offsetHeight);
+        toEnable.forEach((element, index) => {
+            element.style.containIntrinsicSize = `auto ${heights[index]}px`;
+            element.style.contentVisibility = "auto";
+        });
+        toDisable.forEach((element) => {
+            element.style.contentVisibility = "";
+            element.style.containIntrinsicSize = "";
+        });
+    }, [messages]);
+
     return (
         <>
-            {messages.map((message, index) =>
-                message.role === "user" ? (
-                    <UserMessage key={message.id} message={message} />
-                ) : message.role === "assistant" ? (
-                    <AssistantMessage
+            {messages.map((message, index) => {
+                const isLatest = index === messages.length - 1;
+                const content =
+                    message.role === "user" ? (
+                        <MemoizedUserMessage message={message} />
+                    ) : message.role === "assistant" ? (
+                        <MemoizedAssistantMessage
+                            message={message}
+                            onArtifactClick={onArtifactClick}
+                            onRegenerate={isLatest ? onRegenerate : undefined}
+                            isLatestResponse={isLatest}
+                            isStreaming={isStreaming && isLatest}
+                            addMessage={addMessage}
+                        />
+                    ) : null;
+                if (!content) return null;
+                return (
+                    <div
                         key={message.id}
-                        message={message}
-                        onArtifactClick={onArtifactClick}
-                        onRegenerate={onRegenerate}
-                        isLatestResponse={index === messages.length - 1}
-                        isStreaming={isStreaming && index === messages.length - 1}
-                        addMessage={addMessage}
-                    />
-                ) : null
-            )}
+                        ref={(element) => {
+                            if (element) {
+                                elementsRef.current.set(message.id, element);
+                            } else {
+                                elementsRef.current.delete(message.id);
+                            }
+                        }}
+                    >
+                        {content}
+                    </div>
+                );
+            })}
         </>
     );
 };
@@ -670,3 +724,8 @@ const CopyButton: React.FC<CopyButtonProps> = ({ content }) => {
         </Button>
     );
 };
+
+// Older messages keep their props while the latest one streams, so they
+// skip re-rendering on every streamed update and keystroke
+const MemoizedUserMessage = memo(UserMessage);
+const MemoizedAssistantMessage = memo(AssistantMessage);

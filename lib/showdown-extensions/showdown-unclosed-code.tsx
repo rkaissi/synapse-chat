@@ -1,42 +1,31 @@
 import { ShowdownExtension } from "showdown";
 
+const FENCE = /^\s*(`{3,}|~{3,})/;
+
+// Closes a code block that is still being streamed, so it renders as code
+// rather than as text. Tracks fences line by line: the previous regex
+// backtracked through every closed block, which took quadratic time
 const showdownUnclosedCode: ShowdownExtension = {
     type: "lang",
     filter: function (text: string) {
-        // Regex to match unclosed code blocks with a specified language
-        const unclosedCodeBlockRegex =
-            /^```(\w+)\s*\n((?:(?!```)[\s\S])*)(?![\s\S]*?```)/gm;
+        let fence: string | null = null;
 
-        let lastIndex = 0;
-        let result = "";
-
-        let match;
-        while ((match = unclosedCodeBlockRegex.exec(text)) !== null) {
-            const [fullMatch, language, code] = match;
-            const matchStart = match.index;
-            const matchEnd = matchStart + fullMatch.length;
-
-            // Add the text between the last match and this one
-            result += text.slice(lastIndex, matchStart);
-
-            // Check if this block is already closed
-            if (code.trim().endsWith("```")) {
-                result += fullMatch;
-            } else {
-                // Trim any trailing newlines from the code
-                const trimmedCode = code.replace(/\n+$/, "");
-
-                // Close the code block
-                result += `\`\`\`${language}\n${trimmedCode}\n\`\`\``;
+        for (const line of text.split("\n")) {
+            const match = line.match(FENCE);
+            if (!match) continue;
+            if (!fence) {
+                fence = match[1];
+            } else if (
+                match[1][0] === fence[0] &&
+                match[1].length >= fence.length &&
+                line.trim() === match[1]
+            ) {
+                fence = null;
             }
-
-            lastIndex = matchEnd;
         }
 
-        // Add any remaining text after the last match
-        result += text.slice(lastIndex);
-
-        return result;
+        if (!fence) return text;
+        return text.replace(/\n+$/, "") + "\n" + fence;
     }
 };
 

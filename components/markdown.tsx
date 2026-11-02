@@ -1,5 +1,13 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, {
+    useState,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    memo
+} from "react";
 import dynamic from "next/dynamic";
+import { BLOCK_SEPARATOR } from "@/lib/utils/markdown-to-html";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/atom-one-dark.css";
 
@@ -12,9 +20,15 @@ interface Props {
     className?: string;
 }
 
-export const CustomMarkdown = ({ html, className = "" }: Props) => {
+export const CustomMarkdown = memo(function CustomMarkdown({
+    html,
+    className = ""
+}: Props) {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const renderedBlocksRef = useRef<{ html: string; nodes: ChildNode[] }[]>(
+        []
+    );
 
     const openImageModal = useCallback((src: string) => {
         // Extract the original image URL from the Next.js Image component srcset
@@ -169,12 +183,47 @@ export const CustomMarkdown = ({ html, className = "" }: Props) => {
         }
     }, []);
 
+    // The HTML is applied block by block (see BLOCK_SEPARATOR): unchanged
+    // blocks keep their DOM, so a streaming reply only rebuilds the block
+    // being written, and text selections and images above it survive
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const blocks = html.split(BLOCK_SEPARATOR);
+        const previous = renderedBlocksRef.current;
+
+        let unchanged = 0;
+        while (
+            unchanged < previous.length &&
+            unchanged < blocks.length &&
+            previous[unchanged].html === blocks[unchanged]
+        ) {
+            unchanged++;
+        }
+
+        for (const block of previous.slice(unchanged)) {
+            block.nodes.forEach((node) => node.remove());
+        }
+
+        const next = previous.slice(0, unchanged);
+        for (const blockHtml of blocks.slice(unchanged)) {
+            const template = document.createElement("template");
+            template.innerHTML = blockHtml;
+            next.push({
+                html: blockHtml,
+                nodes: Array.from(template.content.childNodes)
+            });
+            container.append(template.content);
+        }
+        renderedBlocksRef.current = next;
+    }, [html]);
+
     return (
         <>
             <div
                 ref={containerRef}
                 className={`markdown-body prose max-w-full m-0 p-0 ${className}`}
-                dangerouslySetInnerHTML={{ __html: html }}
             />
             <AttachmentModal
                 isOpen={!!selectedImage}
@@ -185,4 +234,4 @@ export const CustomMarkdown = ({ html, className = "" }: Props) => {
             />
         </>
     );
-};
+});
