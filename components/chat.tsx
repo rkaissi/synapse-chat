@@ -30,7 +30,9 @@ import dynamic from "next/dynamic";
 import DefaultPromptsSkeleton from "./defaultpromptsskeleton";
 import { ArtifactsWindow } from "./artifactswindow";
 import saveChat from "@/lib/utils/save-chat";
-import markdownToHtml from "@/lib/utils/markdown-to-html";
+import markdownToHtml, {
+    SEGMENT_SEPARATOR
+} from "@/lib/utils/markdown-to-html";
 import { DefaultChatTransport } from "ai";
 import { usePathname } from "next/navigation";
 import { SidebarContainer } from "./sidebar";
@@ -41,6 +43,7 @@ import { extractArtifacts } from "@/app/api/chat/artifact-middleware";
 import {
     getAttachments,
     getMessageReasoning,
+    getMessageSegments,
     getMessageText,
     getToolInvocations,
     toUIMessage
@@ -321,7 +324,7 @@ export function Chat({
         (content: string, model?: ModelKey) => {
             if (!state.enableArtifacts || !content.includes("<assistant")) {
                 return {
-                    cleanedContent: markdownToHtml(content),
+                    cleanedMarkdown: content,
                     artifact: undefined,
                     model: model || state.model
                 };
@@ -373,12 +376,59 @@ export function Chat({
             }
 
             return {
-                cleanedContent: markdownToHtml(cleanedContent),
+                cleanedMarkdown: cleanedContent,
                 artifact,
                 model: model || state.model
             };
         },
         [state.enableArtifacts, state.model]
+    );
+
+    // When each reasoning block started and finished, by message and position
+    const reasoningTimesRef = useRef(
+        new Map<string, { start: number; end?: number }>()
+    );
+
+    // HTML for a message. Assistant replies are split into segments in stream
+    // order (text, reasoning, tool calls) so tool cards render where they
+    // happened instead of below all of the text
+    const renderContent = useCallback(
+        (message: ChatUIMessage, cleanedMarkdown: string) => {
+            if (message.role !== "assistant") {
+                return {
+                    processedContent: markdownToHtml(cleanedMarkdown),
+                    segments: undefined
+                };
+            }
+
+            const { segments, texts } = getMessageSegments(message);
+            const now = Date.now();
+            let reasoningIndex = 0;
+            for (const segment of segments) {
+                if (segment.type !== "reasoning") continue;
+                const key = `${message.id}:${reasoningIndex++}`;
+                const times = reasoningTimesRef.current.get(key) ?? {
+                    start: now
+                };
+                if (segment.done && times.end === undefined) times.end = now;
+                reasoningTimesRef.current.set(key, times);
+                if (times.end !== undefined) {
+                    segment.durationMs = times.end - times.start;
+                }
+            }
+
+            const processedContent = texts
+                .map((text) =>
+                    markdownToHtml(
+                        state.enableArtifacts && text.includes("<assistant")
+                            ? extractArtifacts(text).cleanedContent
+                            : text
+                    )
+                )
+                .join(SEGMENT_SEPARATOR);
+            return { processedContent, segments };
+        },
+        [state.enableArtifacts]
     );
 
     useEffect(() => {
@@ -391,12 +441,14 @@ export function Chat({
             const latestContent = getMessageText(latestMessage);
             const toolInvocations = getToolInvocations(latestMessage);
 
-            const { cleanedContent, artifact, model } = processMessage(
+            const { cleanedMarkdown, artifact, model } = processMessage(
                 latestContent,
                 // The model that answered (Auto's pick), else the previous value
                 latestMessage.metadata?.model ??
                     combinedMessages[latestMessageIndex]?.model
             );
+            const { processedContent: cleanedContent, segments } =
+                renderContent(latestMessage, cleanedMarkdown);
 
             const {
                 promptTokens,
@@ -431,12 +483,16 @@ export function Chat({
                     state.enableArtifacts && content.includes("<assistant")
                         ? extractArtifacts(content)
                         : { cleanedContent: content, artifacts: [] };
-                const html = markdownToHtml(cleanedContent);
+                const { processedContent: html, segments } = renderContent(
+                    message,
+                    cleanedContent
+                );
                 newCombinedMessages.push({
                     id: message.id,
                     role: message.role,
                     originalContent: content,
                     processedContent: html,
+                    segments,
                     attachments: getAttachments(message),
                     artifact: artifacts[0],
                     model: message.metadata?.model ?? state.model,
@@ -466,6 +522,7 @@ export function Chat({
                         id: latestMessage.id, // Update with the new message ID
                         originalContent: latestContent,
                         processedContent: cleanedContent,
+                        segments,
                         artifact: artifact || undefined,
                         model,
                         toolInvocations,
@@ -502,6 +559,7 @@ export function Chat({
                         ...existing,
                         originalContent: latestContent,
                         processedContent: cleanedContent,
+                        segments,
                         artifact: artifact || undefined,
                         model,
                         toolInvocations,
@@ -534,6 +592,7 @@ export function Chat({
                         role: latestMessage.role,
                         originalContent: latestContent,
                         processedContent: cleanedContent || "",
+                        segments,
                         attachments: getAttachments(latestMessage),
                         artifact: artifact || undefined,
                         model,
@@ -591,6 +650,7 @@ export function Chat({
         state.model,
         state.enableArtifacts,
         processMessage,
+        renderContent,
         combinedMessages,
         regeneratingMessageId,
         save

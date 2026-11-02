@@ -25,6 +25,8 @@ const messageSchema: Schema = new Schema({
     cacheReadTokens: { type: Number },
     finishReason: { type: String },
     reasoning: { type: String },
+    // MessageSegment[] in lib/types: the reply's parts in stream order
+    segments: { type: [Schema.Types.Mixed], default: undefined },
     states: { type: [stateSchema] }
 });
 

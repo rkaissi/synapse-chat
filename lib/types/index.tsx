@@ -105,6 +105,18 @@ export type FinishReason =
     | "interrupted"
     | "unknown";
 
+export type MessageSegment =
+    | { type: "text" }
+    | { type: "tool"; toolCallId: string }
+    | {
+          type: "reasoning";
+          text: string;
+          // Whether the provider has finished this reasoning block
+          done: boolean;
+          // How long the model reasoned, measured on the client
+          durationMs?: number;
+      };
+
 export type CombinedMessage = {
     id: string;
     role: Role;
@@ -123,6 +135,10 @@ export type CombinedMessage = {
     cacheReadTokens?: number;
     finishReason?: FinishReason;
     reasoning?: string;
+    // The reply's parts in the order they streamed. Text segments map, in
+    // order, to the pieces of processedContent split by SEGMENT_SEPARATOR.
+    // Missing on chats saved before this, which use the old layout
+    segments?: MessageSegment[];
     states: {
         content: string;
         artifact?: Artifact;

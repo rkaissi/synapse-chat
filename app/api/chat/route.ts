@@ -4,6 +4,8 @@ import {
     isStepCount,
     smoothStream,
     streamText,
+    type TextStreamPart,
+    type ToolSet,
     toUIMessageStream,
     wrapLanguageModel
 } from "ai";
@@ -77,6 +79,35 @@ const getToolsToUse = (
         }
     };
 };
+
+// smoothStream can't skip a part type, so reasoning deltas cross it wrapped
+// in raw parts (which it passes through in order, flushing buffered text)
+const HIDDEN_REASONING = "synapse-reasoning-delta";
+
+const hideReasoningDeltas = <TOOLS extends ToolSet>() =>
+    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+        transform(part, controller) {
+            controller.enqueue(
+                part.type === "reasoning-delta"
+                    ? { type: "raw", rawValue: { [HIDDEN_REASONING]: part } }
+                    : part
+            );
+        }
+    });
+
+const restoreReasoningDeltas = <TOOLS extends ToolSet>() =>
+    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+        transform(part, controller) {
+            const hidden =
+                part.type === "raw" &&
+                (part.rawValue as Record<string, unknown> | null)?.[
+                    HIDDEN_REASONING
+                ];
+            controller.enqueue(
+                hidden ? (hidden as TextStreamPart<TOOLS>) : part
+            );
+        }
+    });
 
 export async function POST(req: Request) {
     const agentDeadlineAt = Date.now() + AGENT_RUN_TIMEOUT_MS;
@@ -241,7 +272,13 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
             )
         }),
         stopWhen: isStepCount(maxSteps),
-        experimental_transform: smoothStream()
+        // Reasoning is passed through as it arrives: smoothing it word by word
+        // slowed it down and held back the answer that follows
+        experimental_transform: [
+            hideReasoningDeltas,
+            smoothStream(),
+            restoreReasoningDeltas
+        ]
     });
 
     return createUIMessageStreamResponse({
