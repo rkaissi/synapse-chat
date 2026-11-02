@@ -46,7 +46,7 @@ import { getUserId } from "@/lib/user";
 import { AGENT_RUN_TIMEOUT_MS } from "@/lib/agents/limits";
 
 // Includes the whole agent network and the outer model's final reply.
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 
 const getToolsToUse = (

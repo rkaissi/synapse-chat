@@ -2,13 +2,13 @@
 
 ## Time budgets
 
-- `/api/chat` and `/api/agents` request a **300-second** function duration (previously the chat route requested 100 seconds).
-- In chat, the network has **240 seconds from the beginning of the request**, not 240 seconds from each tool call. Setup and the outer model's initial planning consume part of that budget. The remaining minute is reserved for the outer model to answer with the completed work and explain unfinished work; it is not a guarantee that the final generation will finish in time.
+- `/api/chat` and `/api/agents` request a **600-second** (10-minute) function duration.
+- In chat, the network has **540 seconds from the beginning of the request**, not a fresh 540 seconds for each tool call. Setup and the outer model's initial planning consume part of that budget. The remaining minute is reserved for the outer model to answer with the completed work and explain unfinished work; it is not a guarantee that the final generation will finish in time.
 - An individual agent step has **120 seconds**, including SDK retries and the structured-output retry. If it times out, its model call is cancelled and the failed step is handed off for recovery.
 - `lib/agents/limits.ts` holds the network/step budgets. Route `maxDuration` exports are literal values because Next needs to analyze them statically. Keep the network deadline below the route duration.
 - Tool progress is emitted at least every **10 seconds** during a silent model call. Heartbeats do **not** bypass a host's hard duration limit.
 
-The route's duration is subject to the deployment's actual function/plan limits and configuration. Local Next development does not enforce `maxDuration` like a serverless host, so the network also enforces its own deadline. This is still request-bound execution: a killed server process or lost response cannot perform recovery. Workflows that must outlive a request need durable background jobs, persisted checkpoints and a reconnect/resume endpoint.
+The route's duration is subject to the deployment's actual function/plan limits and configuration. On Vercel, a 600-second request requires Pro/Enterprise with Fluid Compute; Hobby remains capped at 300 seconds, so this code cannot enable 10-minute requests there. See [Vercel's duration limits](https://vercel.com/docs/functions/configuring-functions/duration). Local Next development does not enforce `maxDuration` like a serverless host, so the network also enforces its own deadline. This is still request-bound execution: a killed server process or lost response cannot perform recovery. Workflows that must outlive a request need durable background jobs, persisted checkpoints and a reconnect/resume endpoint.
 
 ## Token budgets
 

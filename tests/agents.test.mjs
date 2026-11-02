@@ -47,7 +47,7 @@ const harness = (generateText = async () => { throw new Error("Unexpected model 
         return compiled.exports;
     };
     return { ...load("lib/agents/agent-builder.ts"), ...load("lib/agents/run-state.ts"),
-        ...load("lib/agents/tool-stream.ts"), model, NoObjectGeneratedError, NoOutputGeneratedError };
+        ...load("lib/agents/tool-stream.ts"), ...load("lib/agents/limits.ts"), model, NoObjectGeneratedError, NoOutputGeneratedError };
 };
 const agent = (name, execute) => ({ name, role: name, description: name, model: { name: "Fake" }, execute });
 const approved = () => ({ needsRevision: false, summary: "OK" });
@@ -346,4 +346,16 @@ test("an expired request budget does not start any new agent calls", async () =>
     assert.equal(calls, 0);
     assert.equal(snapshots.at(-1).run.status, "error");
     assert.match(snapshots.at(-1).error, /No agents were called/);
+});
+
+
+test("both routes allow ten minutes and the network reserves a minute for the final reply", () => {
+    const h = harness();
+    for (const route of ["app/api/chat/route.ts", "app/api/agents/route.ts"]) {
+        const source = readFileSync(resolve(root, route), "utf8");
+        const duration = Number(source.match(/export const maxDuration\s*=\s*(\d+)/)?.[1]);
+        assert.equal(duration, 600);
+        assert.equal(duration * 1000 - h.AGENT_RUN_TIMEOUT_MS, 60000);
+    }
+    assert.equal(h.AGENT_STEP_TIMEOUT_MS, 120000);
 });
