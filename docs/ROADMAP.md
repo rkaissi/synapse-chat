@@ -25,17 +25,13 @@ A full pass over the interface. Known issues and ideas collected so far:
 
 ### Agents
 
-- [ ] Stream agent progress into the chat: the network runs sequentially and the chat shows nothing until every agent has finished (often 30s+)
-- [x] Per-role models: Programmer on GPT-6.1 Sol, Writer on GPT-6.1 Terra, everything else on GPT-6 Luna
+- [x] Stream agent progress into the chat, with a network graph, plan, team, activity and trace view (agent team card)
+- [x] Per-role models: Programmer and Writer on GPT-6.1 Terra, everything else on GPT-6 Luna
 - [ ] Consider GPT-6.1 Sol for the Mathematician and Logician (reasoning-heavy roles)
 - [ ] Trim the verbose agent prompt logging in the server console
-
-### Agents preview page
-
-An `app/preview/agents` page was started (empty) and removed so builds pass. The intent: a page that runs the agent network through `/api/agents` (client helper: `lib/utils/call-agents.ts`) and shows the agents planning, delegating and reviewing each other's work in real time.
-
-- [ ] Build the page on top of `/api/agents`, streaming each agent message as it is produced
-- [ ] Visualize the task list and which agent is working on what
+- [ ] Stream each agent's text as it is generated (today a step appears when the agent finishes)
+- [ ] Run independent tasks in parallel instead of strictly one after another
+- [ ] Choose which agents may take part in a run
 
 ### Model routing and providers
 

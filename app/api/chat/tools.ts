@@ -4,6 +4,11 @@ import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
 import { formatTime } from "@/lib/utils/format";
 import { createAgentNetwork } from "@/lib/agents";
+import {
+    applyAgentEvent,
+    createRunState,
+    summarizeRunForModel
+} from "@/lib/agents/run-state";
 import executeJavaScript from "@/lib/tools/eval";
 import { imageModel } from "@/lib/utils/model-provider";
 import dbConnect from "@/lib/db";
@@ -46,25 +51,80 @@ export const createAgentsTool = (previousAssistantMessage: string) =>
                     "The agents do not have any context of this conversation or any messages including this one. Provide the agents with context to complete the task. This can include previous messages in the conversation, previous essay drafts, or the current version of the code. Ensure all necessary context is included in full. Do not add new information, as the project manager agent will plan the instructions to complete the task."
                 )
         }),
-        execute: async ({ project, context }) => {
-            console.log("### Agents ###");
-            try {
-                const messages = await agentNetwork.executePrompt(
-                    project,
-                    `${context}.\n\n## Previous user content:\n${previousAssistantMessage}`
-                );
+        // Yields a run snapshot after every agent event so the chat can show
+        // progress live; the last value is the final result
+        execute: async function* ({ project, context }, { abortSignal }) {
+            let run = createRunState();
+            let changed = false;
+            let wake: (() => void) | undefined;
+            let outcome: { messages?: any[]; error?: unknown } | undefined;
 
-                return {
-                    status: "Success: Tasks completed successfully!",
-                    messages
-                };
-            } catch (error) {
-                return {
-                    status: "Error: Fulfill the user request without calling the agents. Preface the response with this error",
-                    error: `An error occurred while trying to receive the agents' responses. Error ${error}.`
-                };
+            agentNetwork
+                .executePrompt(
+                    project,
+                    `${context ?? ""}\n\n## Previous user content:\n${previousAssistantMessage}`,
+                    undefined,
+                    {
+                        abortSignal,
+                        onEvent: (event) => {
+                            run = applyAgentEvent(run, event);
+                            changed = true;
+                            wake?.();
+                        }
+                    }
+                )
+                .then(
+                    (messages) => (outcome = { messages }),
+                    (error) => (outcome = { error })
+                )
+                .finally(() => wake?.());
+
+            while (!outcome) {
+                if (!changed) {
+                    await new Promise<void>((resolve) => (wake = resolve));
+                }
+                if (changed) {
+                    changed = false;
+                    yield { status: "Running", run };
+                }
             }
-        }
+
+            if (outcome.error !== undefined) {
+                const message =
+                    outcome.error instanceof Error
+                        ? outcome.error.message
+                        : String(outcome.error);
+                yield {
+                    status: "Error: Fulfill the user request without calling the agents. Preface the response with this error",
+                    error: `An error occurred while trying to receive the agents' responses. Error: ${message}`,
+                    run: {
+                        ...run,
+                        status: "error" as const,
+                        error: message,
+                        finishedAt: Date.now()
+                    }
+                };
+                return;
+            }
+
+            yield {
+                status: "Success: Tasks completed successfully!",
+                messages: outcome.messages,
+                run
+            };
+        },
+        // The model gets the agents' deliverables, not their full exchange
+        // (plans, reviews, thinking); on failure, what finished plus the error
+        toModelOutput: ({ output }) => ({
+            type: "json",
+            value: JSON.parse(
+                JSON.stringify({
+                    status: output.status,
+                    ...(output.run && summarizeRunForModel(output.run)),
+                    error: output.error
+                })
+            )
+        })
     });
 
 export const tools = {

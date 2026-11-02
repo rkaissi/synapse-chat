@@ -72,13 +72,16 @@ interface MessagesProps {
     onArtifactClick: (identifier: string) => void;
     onRegenerate?: () => void;
     addMessage?: (message: NewMessage) => void;
+    // Whether the latest message is still streaming
+    isStreaming?: boolean;
 }
 
 export const Messages = ({
     messages,
     onArtifactClick,
     onRegenerate,
-    addMessage
+    addMessage,
+    isStreaming = false
 }: MessagesProps) => {
     return (
         <>
@@ -92,6 +95,7 @@ export const Messages = ({
                         onArtifactClick={onArtifactClick}
                         onRegenerate={onRegenerate}
                         isLatestResponse={index === messages.length - 1}
+                        isStreaming={isStreaming && index === messages.length - 1}
                         addMessage={addMessage}
                     />
                 ) : null
@@ -135,6 +139,7 @@ export const UserMessage = ({ message }: UserMessageProps) => {
 interface AssistantMessageProps {
     message: CombinedMessage | string;
     isLatestResponse: boolean;
+    isStreaming?: boolean;
     onArtifactClick?: (identifier: string) => void;
     onRegenerate?: () => void;
     addMessage?: (message: NewMessage) => void;
@@ -143,6 +148,7 @@ interface AssistantMessageProps {
 export const AssistantMessage = ({
     message,
     isLatestResponse,
+    isStreaming = false,
     onArtifactClick,
     onRegenerate,
     addMessage
@@ -470,20 +476,15 @@ export const AssistantMessage = ({
             (tool) => tool.toolName === "call_agents"
         );
 
-        if (
-            !agentsInvocation ||
-            agentsInvocation.state !== "result" ||
-            !agentsInvocation.result
-        )
-            return null;
+        if (!agentsInvocation) return null;
 
-        const { status, messages } = agentsInvocation.result;
-
-        if (!messages || !Array.isArray(messages)) {
-            return null;
-        }
-
-        return <AgentsCard messages={messages} status={status} />;
+        // Progress updates arrive as preliminary results while the agents work
+        return (
+            <AgentsCard
+                result={agentsInvocation.result}
+                isStreaming={isStreaming}
+            />
+        );
     };
 
     return (
@@ -563,6 +564,9 @@ export const AssistantMessage = ({
 
                     {reasoning && <ReasoningDisplay reasoning={reasoning} />}
 
+                    {/* The agents work before the reply is written */}
+                    <div className="mt-1 mb-3 empty:hidden">{renderAgentsCard()}</div>
+
                     <div className="text-muted-foreground text-wrap w-full">
                         {processedContent}
                     </div>
@@ -574,7 +578,6 @@ export const AssistantMessage = ({
                         {renderImages()}
                         {renderSources()}
                         {renderReadURLCard()}
-                        {renderAgentsCard()}
                         {typeof message !== "string" &&
                             renderTranscriptPreview(message)}
                     </div>

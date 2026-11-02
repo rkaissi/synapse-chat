@@ -5,19 +5,44 @@ import {
     models,
     reasoningModels
 } from "@/lib/utils/model-provider";
-import { generateText, NoOutputGeneratedError, Output } from "ai";
+import {
+    generateText,
+    NoObjectGeneratedError,
+    NoOutputGeneratedError,
+    Output
+} from "ai";
+import { ReasoningLevel } from "@/lib/types";
+import {
+    AgentEvent,
+    AgentEventHandler,
+    AgentEventInput,
+    AgentProfile,
+    AgentStepKind
+} from "./events";
 
 const MAX_ATTEMPTS = 2;
 
 // Define the Agent interface
 interface Agent {
     name: string;
+    // Short tagline shown on the agents page
+    description: string;
     role: string;
     model: ModelConfig;
     temperature: number;
     maxTokens: number;
+    reasoning: ReasoningLevel;
     schema: z.ZodType<any>;
-    execute: (prompt: string, context?: any) => Promise<any>;
+    execute: (
+        prompt: string,
+        context?: any,
+        abortSignal?: AbortSignal
+    ) => Promise<any>;
+}
+
+interface ExecuteOptions {
+    onEvent?: AgentEventHandler;
+    abortSignal?: AbortSignal;
 }
 
 interface Message {
@@ -228,13 +253,60 @@ export class AgentNetwork {
         return Object.values(this.agents);
     }
 
+    getProfiles(): AgentProfile[] {
+        const profile = (agent: Agent, lead: boolean) => ({
+            name: agent.name,
+            description: agent.description,
+            model: agent.model.name,
+            lead
+        });
+        return [
+            profile(this.projectManager, true),
+            profile(this.supervisor, true),
+            ...this.listAgents().map((agent) => profile(agent, false))
+        ];
+    }
+
     async executePrompt(
         prompt: string,
         additionalContext: string = "",
-        initialTaskList?: any[]
+        initialTaskList?: any[],
+        { onEvent, abortSignal }: ExecuteOptions = {}
     ): Promise<any> {
         const fullPrompt = `\n${prompt}\n\n## Additional Context:\n${additionalContext}`;
         const contextManager = new ContextManager(fullPrompt);
+
+        const emit = (event: AgentEventInput) =>
+            onEvent?.({ ...event, at: Date.now() } as AgentEvent);
+        let stepCount = 0;
+        // Runs one agent call, wrapped in step-start/step-finish events
+        const runStep = async (
+            agent: Agent,
+            kind: AgentStepKind,
+            instructions: string,
+            context: string | undefined,
+            taskIndex?: number
+        ) => {
+            const id = `step-${++stepCount}`;
+            emit({
+                type: "step-start",
+                id,
+                agent: agent.name,
+                kind,
+                revision: contextManager.revisionCount,
+                taskIndex,
+                instructions: kind === "task" ? instructions : undefined
+            });
+            const result = await agent.execute(
+                instructions,
+                context,
+                abortSignal
+            );
+            emit({ type: "step-finish", id, content: result });
+            return result;
+        };
+
+        emit({ type: "run-start", prompt, agents: this.getProfiles() });
 
         while (contextManager.revisionCount < this.maxRevisions) {
             console.log("REVISION COUNT: ", contextManager.revisionCount);
@@ -246,7 +318,12 @@ export class AgentNetwork {
                 const pmPrompt = contextManager.createProjectManagerPrompt(
                     Object.values(this.agents)
                 );
-                const pmResult = await this.projectManager.execute(pmPrompt);
+                const pmResult = await runStep(
+                    this.projectManager,
+                    "plan",
+                    pmPrompt,
+                    undefined
+                );
 
                 contextManager.taskList = pmResult.taskList;
 
@@ -262,10 +339,17 @@ export class AgentNetwork {
                 });
             }
 
+            emit({
+                type: "plan",
+                revision: contextManager.revisionCount,
+                // Copy: completeTask() removes tasks from the live list
+                taskList: [...contextManager.taskList]
+            });
+
             let needsRevision = false;
             const taskList = [...contextManager.taskList];
 
-            for (const task of taskList) {
+            for (const [taskIndex, task] of taskList.entries()) {
                 contextManager.currentTask = task;
 
                 const agent = this.agents[task.agent];
@@ -284,9 +368,12 @@ export class AgentNetwork {
                     `### AGENT: ${agent.name} ###\n\n# Instructions: ${task.instructions}\n\n# Context: ${taskContext}\n\n`
                 );
                 // Execute the task with the current agent
-                const result = await agent.execute(
+                const result = await runStep(
+                    agent,
+                    "task",
                     task.instructions,
-                    taskContext
+                    taskContext,
+                    taskIndex
                 );
 
                 contextManager.addMessage({
@@ -296,13 +383,16 @@ export class AgentNetwork {
                 });
 
                 const supervisorContext = contextManager.getProjectContext();
-                const supervisorReview = await this.supervisor.execute(
+                const supervisorReview = await runStep(
+                    this.supervisor,
+                    "review",
                     JSON.stringify({
                         agent: task.agent,
                         task: task.instructions,
                         result: result
                     }),
-                    supervisorContext
+                    supervisorContext,
+                    taskIndex
                 );
 
                 contextManager.lastTaskReview = supervisorReview;
@@ -333,10 +423,18 @@ export class AgentNetwork {
             }
 
             contextManager.incrementRevisionCount();
+            if (contextManager.revisionCount < this.maxRevisions) {
+                emit({
+                    type: "revision",
+                    revision: contextManager.revisionCount,
+                    report: contextManager.lastRevisionReport
+                });
+            }
         }
 
         console.log("### GLOBAL CONTEXT ###");
         console.log(JSON.stringify(contextManager.globalMessages));
+        emit({ type: "run-finish" });
         return contextManager.globalMessages;
     }
 }
@@ -345,20 +443,29 @@ export class AgentNetwork {
 export class AgentBuilder {
     build(config: {
         name: string;
+        description: string;
         role: string;
         model: ModelConfig;
         temperature: number;
         maxTokens: number;
+        // Reasoning effort for reasoning models (default: high)
+        reasoning?: ReasoningLevel;
         schema: z.ZodType<any>;
     }): Agent {
         return {
             name: config.name,
+            description: config.description,
             role: config.role,
             model: config.model,
             temperature: config.temperature,
             maxTokens: config.maxTokens,
+            reasoning: config.reasoning ?? "high",
             schema: config.schema,
-            execute: async (prompt: string, context?: string) => {
+            execute: async (
+                prompt: string,
+                context?: string,
+                abortSignal?: AbortSignal
+            ) => {
                 const fullPrompt = `Instructions: ${prompt}\n\nContext: ${context}\n\nInstructions: ${prompt}`;
 
                 // Reasoning models only support the default temperature
@@ -366,33 +473,49 @@ export class AgentBuilder {
                     (key) => models[key].model === config.model.model
                 );
 
-                // A model occasionally returns no parseable object; retry once
-                // before failing the whole network
+                // A response can be cut off (the token budget includes hidden
+                // reasoning) or unparseable; retry once before failing the
+                // whole network, with a bigger budget if it ran out
+                let maxOutputTokens = config.maxTokens;
                 for (let attempt = 1; ; attempt++) {
-                    const result = await generateText({
-                        model: getModel(config.model),
-                        instructions: config.role,
-                        temperature: isReasoning ? undefined : config.temperature,
-                        maxOutputTokens: config.maxTokens,
-                        prompt: fullPrompt,
-                        output: Output.object({ schema: config.schema }),
-                        providerOptions: { openai: { strictJsonSchema: false } }
-                    });
-
+                    let finishReason: string | undefined;
                     try {
+                        const result = await generateText({
+                            model: getModel(config.model),
+                            instructions: config.role,
+                            temperature: isReasoning ? undefined : config.temperature,
+                            reasoning: isReasoning ? config.reasoning : undefined,
+                            maxOutputTokens,
+                            prompt: fullPrompt,
+                            abortSignal,
+                            output: Output.object({ schema: config.schema }),
+                            providerOptions: { openai: { strictJsonSchema: false } }
+                        });
+                        finishReason = result.finishReason;
                         return result.output;
                     } catch (error) {
-                        if (
-                            !NoOutputGeneratedError.isInstance(error) ||
-                            attempt >= MAX_ATTEMPTS
-                        ) {
+                        const noOutput =
+                            NoObjectGeneratedError.isInstance(error) ||
+                            NoOutputGeneratedError.isInstance(error);
+                        if (NoObjectGeneratedError.isInstance(error)) {
+                            finishReason = error.finishReason;
+                        }
+                        if (!noOutput || attempt >= MAX_ATTEMPTS) {
                             throw new Error(
-                                `${config.name} returned no usable output (finish reason: ${result.finishReason})`,
+                                noOutput
+                                    ? `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"})`
+                                    : `${config.name} failed: ${error instanceof Error ? error.message : String(error)}`,
                                 { cause: error }
                             );
                         }
+                        if (finishReason === "length") {
+                            maxOutputTokens = Math.min(
+                                maxOutputTokens * 2,
+                                config.model.maxTokens ?? maxOutputTokens * 2
+                            );
+                        }
                         console.warn(
-                            `${config.name} returned no usable output (finish reason: ${result.finishReason}), retrying`
+                            `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"}), retrying with ${maxOutputTokens} tokens`
                         );
                     }
                 }

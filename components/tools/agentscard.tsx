@@ -1,236 +1,198 @@
-import React, { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import React, { useEffect, useState } from "react";
 import {
-    ChevronDownIcon,
-    ChevronUpIcon,
-    UsersIcon,
-    BrainIcon,
-    CheckCircleIcon,
-    AlertCircleIcon
+    Activity,
+    ChartGantt,
+    ChevronDown,
+    ListChecks,
+    Users,
+    Workflow
 } from "lucide-react";
-
-interface AgentMessage {
-    agent: string;
-    content: any;
-    type: "task" | "result" | "review";
-}
+import { cn } from "@/lib/utils";
+import {
+    AgentRunState,
+    runStateFromMessages
+} from "@/lib/agents/run-state";
+import ActivityFeed, { AgentAvatar } from "@/components/agents/activity-feed";
+import { formatDuration } from "@/components/agents/agent-meta";
+import NetworkGraph from "@/components/agents/network-graph";
+import {
+    getPlanProgress,
+    PlanList,
+    TeamList,
+    TraceView
+} from "@/components/agents/side-panels";
 
 interface AgentsCardProps {
-    messages: AgentMessage[];
-    status: string;
+    // call_agents output: { status, run?, messages?, error? }; undefined
+    // until the first progress update arrives
+    result?: any;
+    // Whether this message is still streaming
+    isStreaming: boolean;
 }
 
-const AgentsCard: React.FC<AgentsCardProps> = ({ messages, status }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [expandedMessages, setExpandedMessages] = useState<Set<number>>(
-        new Set()
+type Tab = "activity" | "plan" | "team" | "trace";
+
+const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+    { key: "activity", label: "Activity", icon: Activity },
+    { key: "plan", label: "Plan", icon: ListChecks },
+    { key: "team", label: "Team", icon: Users },
+    { key: "trace", label: "Trace", icon: ChartGantt }
+];
+
+// Current time, ticking while active (for live timers)
+const useNow = (active: boolean) => {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!active) return;
+        const timer = setInterval(() => setNow(Date.now()), 100);
+        return () => clearInterval(timer);
+    }, [active]);
+    return now;
+};
+
+const getRun = (result: any): AgentRunState | undefined => {
+    if (result?.run) return result.run;
+    if (Array.isArray(result?.messages)) return runStateFromMessages(result.messages);
+};
+
+// When an interrupted run last made progress
+const getLastActivity = (run: AgentRunState) =>
+    Math.max(
+        run.startedAt,
+        ...run.steps.map((step) => step.finishedAt ?? step.startedAt)
     );
 
-    const toggleMessageExpansion = (index: number) => {
-        const newExpanded = new Set(expandedMessages);
-        if (newExpanded.has(index)) {
-            newExpanded.delete(index);
-        } else {
-            newExpanded.add(index);
-        }
-        setExpandedMessages(newExpanded);
-    };
+const AgentsCard = ({ result, isStreaming }: AgentsCardProps) => {
+    const run = getRun(result);
+    const live = isStreaming && (!run || run.status === "running");
+    const stopped = !live && run?.status === "running";
+    const now = useNow(live);
+    const [open, setOpen] = useState<boolean | null>(null);
+    const [tab, setTab] = useState<Tab>("activity");
+    // Open while the agents work, collapsed once they're done
+    const expanded = open ?? live;
 
-    const getTypeIcon = (type: string) => {
-        switch (type) {
-            case "task":
-                return <BrainIcon className="w-4 h-4" />;
-            case "result":
-                return <CheckCircleIcon className="w-4 h-4" />;
-            case "review":
-                return <AlertCircleIcon className="w-4 h-4" />;
-            default:
-                return <UsersIcon className="w-4 h-4" />;
-        }
-    };
+    const endedAt = !run || live ? undefined : (run.finishedAt ?? getLastActivity(run));
+    const active = live ? run?.steps.find((step) => step.finishedAt === undefined) : undefined;
+    const hasTiming = !!run && run.startedAt > 0;
+    const elapsed = run && hasTiming ? (endedAt ?? now) - run.startedAt : 0;
+    const participants = run
+        ? [...new Set(run.steps.map((step) => step.agent))]
+        : [];
+    const { completed, total } = run
+        ? getPlanProgress(run, live)
+        : { completed: 0, total: 0 };
 
-    const getTypeBadgeColor = (type: string) => {
-        switch (type) {
-            case "task":
-                return "bg-blue-100 text-blue-800";
-            case "result":
-                return "bg-green-100 text-green-800";
-            case "review":
-                return "bg-orange-100 text-orange-800";
-            default:
-                return "bg-gray-100 text-gray-800";
-        }
-    };
-
-    const formatContent = (content: any) => {
-        if (typeof content === "string") {
-            return content;
-        }
-        if (typeof content === "object") {
-            // Handle taskList specifically
-            if (content.taskList && Array.isArray(content.taskList)) {
-                return content.taskList.map((task: any, index: number) => (
-                    <div key={index} className="mb-2 p-2 bg-gray-50 rounded">
-                        <p className="font-medium text-sm">
-                            Agent: {task.agent}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                            {task.instructions}
-                        </p>
-                    </div>
-                ));
-            }
-            // Handle other object types
-            if (content.output) {
-                return content.output;
-            }
-            if (content.innerThinking && content.output) {
-                return (
-                    <div>
-                        <div className="mb-2">
-                            <p className="text-sm font-medium text-gray-600 mb-1">
-                                Thinking:
-                            </p>
-                            <p className="text-sm text-gray-500 italic">
-                                {content.innerThinking}
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-600 mb-1">
-                                Output:
-                            </p>
-                            <p className="text-sm">{content.output}</p>
-                        </div>
-                    </div>
-                );
-            }
-            return JSON.stringify(content, null, 2);
-        }
-        return String(content);
-    };
-
-    const getTruncatedContent = (content: any, maxLength: number = 5000) => {
-        const formatted = formatContent(content);
-        if (typeof formatted === "string") {
-            return formatted.length > maxLength
-                ? formatted.substring(0, maxLength) + "..."
-                : formatted;
-        }
-        return formatted;
-    };
-
-    const visibleMessages = isExpanded ? messages : messages.slice(0, 3);
-    const isSuccessful = status.includes("Success");
+    const subtitle = !run
+        ? "Assembling the team…"
+        : live
+          ? active
+              ? `${active.agent} is ${
+                    active.kind === "plan"
+                        ? "planning the work"
+                        : active.kind === "review"
+                          ? "reviewing a result"
+                          : "working on a task"
+                }…`
+              : "Handing off…"
+          : run.status === "error"
+            ? `Failed: ${run.error ?? "unknown error"}`
+            : stopped
+              ? "Stopped"
+              : `Completed${total ? ` · ${completed}/${total} tasks` : ""} · ${run.steps.length} steps`;
 
     return (
-        <Card className="w-full">
-            <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                        <div className="bg-purple-100 rounded-full p-2">
-                            <UsersIcon className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold">
-                                Agent Collaboration
-                            </h3>
-                            <p className="text-sm text-gray-500">
-                                {messages.length} message
-                                {messages.length !== 1 ? "s" : ""} from{" "}
-                                {new Set(messages.map((m) => m.agent)).size}{" "}
-                                agent
-                                {new Set(messages.map((m) => m.agent)).size !==
-                                1
-                                    ? "s"
-                                    : ""}
-                            </p>
-                        </div>
-                    </div>
-                    <Badge
-                        className={
-                            isSuccessful
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                        }
+        <div className="@container overflow-hidden rounded-lg border bg-background">
+            <button
+                onClick={() => setOpen(!expanded)}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+            >
+                <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-sky-500 text-white">
+                    <Workflow className="h-4 w-4" />
+                    {live && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-sky-400 animate-pulse" />
+                    )}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Agent team</p>
+                    <p
+                        className={cn(
+                            "truncate text-xs",
+                            live
+                                ? "agent-shimmer text-muted-foreground"
+                                : run?.status === "error"
+                                  ? "text-red-600"
+                                  : "text-muted-foreground"
+                        )}
                     >
-                        {isSuccessful ? "Success" : "Error"}
-                    </Badge>
+                        {subtitle}
+                    </p>
                 </div>
-
-                <div className="space-y-3">
-                    {visibleMessages.map((message, index) => (
-                        <div
-                            key={index}
-                            className="border rounded-lg p-3 bg-gray-50"
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                    {getTypeIcon(message.type)}
-                                    <span className="font-medium text-sm">
-                                        {message.agent}
-                                    </span>
-                                    <Badge
-                                        className={`text-xs ${getTypeBadgeColor(
-                                            message.type
-                                        )}`}
-                                    >
-                                        {message.type}
-                                    </Badge>
-                                </div>
-                                {typeof message.content === "string" &&
-                                    message.content.length > 200 && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                                toggleMessageExpansion(index)
-                                            }
-                                            className="h-6 px-2"
-                                        >
-                                            {expandedMessages.has(index) ? (
-                                                <ChevronUpIcon className="w-3 h-3" />
-                                            ) : (
-                                                <ChevronDownIcon className="w-3 h-3" />
-                                            )}
-                                        </Button>
-                                    )}
-                            </div>
-                            <div className="text-sm text-gray-700">
-                                {expandedMessages.has(index)
-                                    ? formatContent(message.content)
-                                    : getTruncatedContent(message.content)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {messages.length > 3 && (
-                    <div className="mt-4 text-center">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className="text-sm text-gray-600"
-                        >
-                            {isExpanded ? (
-                                <>
-                                    <ChevronUpIcon className="w-4 h-4 mr-1" />
-                                    Show Less
-                                </>
-                            ) : (
-                                <>
-                                    <ChevronDownIcon className="w-4 h-4 mr-1" />
-                                    Show {messages.length - 3} More Message
-                                    {messages.length - 3 !== 1 ? "s" : ""}
-                                </>
-                            )}
-                        </Button>
+                {!expanded && participants.length > 0 && (
+                    <div className="hidden -space-x-1.5 @md:flex">
+                        {participants.slice(0, 6).map((name) => (
+                            <span key={name} className="rounded-xl ring-2 ring-background">
+                                <AgentAvatar name={name} size={22} />
+                            </span>
+                        ))}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+                {hasTiming && (
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                        {formatDuration(elapsed)}
+                    </span>
+                )}
+                <ChevronDown
+                    className={cn(
+                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                        expanded && "rotate-180"
+                    )}
+                />
+            </button>
+
+            {expanded && (
+                <div className="space-y-3 border-t px-3 pb-3 pt-3 animate-in fade-in duration-300">
+                    {run && run.agents.length > 0 && <NetworkGraph state={run} active={active} />}
+
+                    {run && (
+                        <>
+                            <div className="flex items-center gap-1 overflow-x-auto rounded-md bg-muted p-1 text-sm">
+                                {TABS.map(({ key, label, icon: Icon }) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setTab(key)}
+                                        className={cn(
+                                            "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs font-medium transition",
+                                            tab === key
+                                                ? "bg-background text-foreground shadow-sm"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        <Icon className="h-3.5 w-3.5" />
+                                        {label}
+                                        {key === "plan" && total > 0 && (
+                                            <span className="font-mono text-[10px] tabular-nums opacity-70">
+                                                {completed}/{total}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {tab === "activity" &&
+                                (run.steps.length > 0 || run.status === "error" ? (
+                                    <ActivityFeed state={run} now={now} endedAt={endedAt} />
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">Starting…</p>
+                                ))}
+                            {tab === "plan" && <PlanList state={run} live={live} />}
+                            {tab === "team" && <TeamList state={run} active={active} now={now} />}
+                            {tab === "trace" && <TraceView state={run} now={now} endedAt={endedAt} />}
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
     );
 };
 

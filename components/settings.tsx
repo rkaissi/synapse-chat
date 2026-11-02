@@ -51,10 +51,12 @@ import {
     tools
 } from "@/app/api/chat/config";
 import {
+    isReasoningModel,
     models,
     unsupportedArtifactUseModels,
     unsupportedToolUseModels
 } from "@/lib/utils/model-provider";
+import ReasoningLevelSelect from "./reasoninglevelselect";
 
 interface Props {
     isOpen: boolean;
@@ -64,8 +66,9 @@ interface Props {
 }
 
 const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
-    const maxPossibleOutput = models[settings.model].maxTokens || 4096;
-    const [toolChoice, setToolChoice] = useState<ToolChoice>("auto");
+    // Auto and Agents route to GPT-6 models (128k output)
+    const maxPossibleOutput = models[settings.model].maxTokens || 128000;
+    const [toolChoice, setToolChoice] = useState<ToolChoice>(settings.toolChoice);
     const [openCombobox, setOpenCombobox] = useState(false);
     const [selectedTool, setSelectedTool] = useState<string>(
         typeof settings.toolChoice === "object"
@@ -73,11 +76,12 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
             : ""
     );
 
+    // Clamp to the selected model's limit (only when it is exceeded, since
+    // settings are persisted)
     useEffect(() => {
-        dispatch({
-            type: "SET_MAX_TOKENS",
-            payload: Math.min(settings.maxTokens, maxPossibleOutput)
-        });
+        if (settings.maxTokens > maxPossibleOutput) {
+            dispatch({ type: "SET_MAX_TOKENS", payload: maxPossibleOutput });
+        }
     }, [maxPossibleOutput, settings.maxTokens, dispatch]);
 
     const handleSetMaxTokens = (value: number) => {
@@ -195,6 +199,27 @@ const SettingsMenu = ({ isOpen, onClose, settings, dispatch }: Props) => {
                                         className="w-20"
                                     />
                                 </div>
+                                <div className="flex items-center space-x-4">
+                                    <Label htmlFor="reasoningLevel" className="w-36 shrink-0">
+                                        Reasoning Level
+                                    </Label>
+                                    <ReasoningLevelSelect
+                                        value={settings.reasoningLevel}
+                                        onChange={(value) =>
+                                            dispatch({
+                                                type: "SET_REASONING_LEVEL",
+                                                payload: value
+                                            })
+                                        }
+                                        className="w-full"
+                                    />
+                                </div>
+                                {!isReasoningModel(settings.model) &&
+                                    !["auto", "agents"].includes(settings.model) && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Reasoning level applies to reasoning models (GPT-6, GPT-OSS, Qwen).
+                                        </p>
+                                    )}
                                 <div className="flex items-center space-x-4">
                                     <Label htmlFor="topP" className="w-36">
                                         Top P

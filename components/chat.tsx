@@ -5,7 +5,6 @@ import React, {
     useEffect,
     useRef,
     useCallback,
-    useReducer,
     useLayoutEffect
 } from "react";
 import { Messages } from "./messages";
@@ -19,24 +18,13 @@ import {
     RepoConnection,
     Settings
 } from "@/lib/types";
-import { ModelKey } from "@/lib/utils/model-provider";
+import { isReasoningModel, ModelKey } from "@/lib/utils/model-provider";
+import ReasoningLevelSelect from "./reasoninglevelselect";
 import ChatHeader from "./chatheader";
 import ChatFooter from "./chatfooter";
 import SettingsMenu from "./settings";
-import {
-    DEFAULT_ENABLE_ARTIFACTS,
-    DEFAULT_ENABLE_INSTRUCTIONS,
-    DEFAULT_ENABLE_LOGIC_MODE,
-    DEFAULT_ENABLE_MEMORY,
-    DEFAULT_ENABLE_PASTE_TO_FILE,
-    DEFAULT_ENABLE_SAFEGUARDS,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_MESSAGE_LIMIT,
-    DEFAULT_MODEL,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_TOOL_CHOICE,
-    DEFAULT_TOPP
-} from "@/app/api/chat/config";
+import { usePreferences } from "@/lib/hooks/use-preferences";
+import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import ContinueButton from "./continuebutton";
 import dynamic from "next/dynamic";
 import DefaultPromptsSkeleton from "./defaultpromptsskeleton";
@@ -93,6 +81,8 @@ const reducer = (state: Settings, action: Action): Settings => {
             return { ...state, customInstructions: action.payload };
         case "SET_TOOL_CHOICE":
             return { ...state, toolChoice: action.payload };
+        case "SET_REASONING_LEVEL":
+            return { ...state, reasoningLevel: action.payload };
         default:
             return state;
     }
@@ -101,23 +91,32 @@ const reducer = (state: Settings, action: Action): Settings => {
 export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const path = usePathname();
 
-    const [state, dispatch] = useReducer(reducer, {
-        model: DEFAULT_MODEL,
-        temperature: DEFAULT_TEMPERATURE,
-        topP: DEFAULT_TOPP,
-        maxTokens: DEFAULT_MAX_TOKENS,
-        messageLimit: DEFAULT_MESSAGE_LIMIT,
-        enableArtifacts: DEFAULT_ENABLE_ARTIFACTS,
-        enableInstructions: DEFAULT_ENABLE_INSTRUCTIONS,
-        enableSafeguards: DEFAULT_ENABLE_SAFEGUARDS,
-        enableLogicMode: DEFAULT_ENABLE_LOGIC_MODE,
-        enablePasteToFile: DEFAULT_ENABLE_PASTE_TO_FILE,
-        enableMemory: DEFAULT_ENABLE_MEMORY,
-        toolChoice: DEFAULT_TOOL_CHOICE,
-        customInstructions: ""
-    });
+    // Settings and the sidebar state persist across chats and reloads
+    const { preferences, updatePreferences } = usePreferences();
+    const state = preferences.settings;
+    const dispatch = useCallback(
+        (action: Action) =>
+            updatePreferences((current) => ({
+                ...current,
+                settings: reducer(current.settings, action)
+            })),
+        [updatePreferences]
+    );
 
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    // On small screens the sidebar is an overlay, so it always starts closed
+    const isDesktop = useMediaQuery("(min-width: 1024px)");
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const isSidebarOpen = isDesktop ? preferences.sidebarOpen : isMobileSidebarOpen;
+    const setIsSidebarOpen = useCallback(
+        (open: boolean) => {
+            if (isDesktop) {
+                updatePreferences((current) => ({ ...current, sidebarOpen: open }));
+            } else {
+                setIsMobileSidebarOpen(open);
+            }
+        },
+        [isDesktop, updatePreferences]
+    );
 
     const [activeTab, setActiveTab] = useState("preview");
     const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -157,6 +156,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     const { messages, setMessages, sendMessage, status, error, stop, regenerate } =
         useChat<ChatUIMessage>({
             transport,
+            // Batch streamed chunks. Each update re-runs message processing,
+            // and long fast replies otherwise exceed React's nested update limit
+            throttle: 50,
             // Also called after stop() and errors. The save happens once the
             // status settles and the final message has been processed (see below)
             onFinish: ({ message }) => {
@@ -617,6 +619,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                                         onArtifactClick={openArtifact}
                                         onRegenerate={handleReload}
                                         addMessage={addMessage}
+                                        isStreaming={isLoading}
                                     />
                                 )}
                                 {error && (
@@ -646,6 +649,22 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             }}
                             enablePasteToFile={state.enablePasteToFile}
                             disabled={!!error}
+                            controls={
+                                (isReasoningModel(state.model) ||
+                                    state.model === "auto" ||
+                                    state.model === "agents") && (
+                                    <ReasoningLevelSelect
+                                        compact
+                                        value={state.reasoningLevel}
+                                        onChange={(value) =>
+                                            dispatch({
+                                                type: "SET_REASONING_LEVEL",
+                                                payload: value
+                                            })
+                                        }
+                                    />
+                                )
+                            }
                         />
                     </div>
                     <ArtifactsWindow

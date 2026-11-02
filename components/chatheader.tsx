@@ -17,7 +17,6 @@ import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import {
     BlendIcon,
     BookOpenIcon,
-    CalculatorIcon,
     GaugeIcon,
     LayoutPanelLeftIcon,
     LightbulbIcon,
@@ -121,13 +120,6 @@ export const modelInfo: Partial<
         description: "Open-weight thinking model from Alibaba Cloud on Groq.",
         icon: BlendIcon,
         provider: ModelProvider.Groq
-    },
-    mathgpt: {
-        name: "MathGPT",
-        description:
-            "Custom GPT-4o mini model that excels at advanced math questions.",
-        icon: CalculatorIcon,
-        provider: ModelProvider.Other
     },
     reasoning: {
         name: "Reasoning",
@@ -304,7 +296,6 @@ const ChatHeader = ({
                         size="icon"
                         onClick={onOpenSettings}
                         aria-label="Open settings"
-                        disabled={selectedModel === "agents"}
                     >
                         <SettingsIcon className="h-4 w-4" />
                     </Button>

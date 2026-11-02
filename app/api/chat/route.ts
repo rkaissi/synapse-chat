@@ -19,7 +19,9 @@ import { createAgentsTool, tools, artifactExtractionMiddleware } from "./tools";
 import buildPrompt from "./prompt-builder";
 import {
     agentsPrompt,
+    artifactPrompt,
     DEFAULT_AGENT_SETTINGS,
+    DEFAULT_REASONING_LEVEL,
     keywordCategories,
     maxSteps,
     toolsPrompt
@@ -118,7 +120,8 @@ export async function POST(req: Request) {
         enableLogicMode,
         enableMemory,
         customInstructions,
-        toolChoice
+        toolChoice,
+        reasoningLevel = DEFAULT_REASONING_LEVEL
     } = settings;
 
     const modelToUse = determineModel(model, messages);
@@ -145,7 +148,7 @@ export async function POST(req: Request) {
         : []; // This can be a tool as well
 
     const system = useAgents
-        ? `${agentsPrompt}${toolsPrompt}${relevantMemories.join("\n")}`
+        ? `${agentsPrompt}${enableArtifacts ? artifactPrompt : ""}${toolsPrompt}${relevantMemories.join("\n")}`
         : buildPrompt(
               enableArtifacts && !unsupportedArtifactUseModels.includes(model),
               enableInstructions,
@@ -199,7 +202,13 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
         // Reasoning models only support the default sampling settings
         temperature: isThinkingModel ? undefined : finalTemperature,
         topP: isThinkingModel ? undefined : finalTopP,
-        maxOutputTokens: finalMaxTokens,
+        maxOutputTokens: Math.min(
+            finalMaxTokens!,
+            models[modelToUse].maxTokens ?? finalMaxTokens!
+        ),
+        // The custom "reasoning" model has its own thinking budget
+        reasoning:
+            isThinkingModel && modelToUse !== "reasoning" ? reasoningLevel : undefined,
         instructions: {
             role: "system",
             content: system + repoPrompt,

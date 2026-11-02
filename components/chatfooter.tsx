@@ -21,6 +21,8 @@ interface Props {
     handleStop: () => void;
     enablePasteToFile: boolean;
     disabled?: boolean;
+    // Extra controls shown inside the input, left of the send button
+    controls?: React.ReactNode;
 }
 
 const LARGE_TEXT_THRESHOLD = 2000;
@@ -35,7 +37,8 @@ const ChatFooter = ({
     isLoading,
     handleStop,
     enablePasteToFile,
-    disabled = false
+    disabled = false,
+    controls
 }: Props) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isMultiline, setIsMultiline] = useState(false);
@@ -124,9 +127,11 @@ const ChatFooter = ({
         }
     };
 
+    // Only the input affects the height (handleInputChange is a new function
+    // on every parent render, which re-ran this on every streamed chunk)
     useEffect(() => {
         adjustTextareaHeight();
-    }, [input, handleInputChange]);
+    }, [input]);
 
     const handleFileUpload = async (
         event: React.ChangeEvent<HTMLInputElement>
@@ -355,8 +360,13 @@ const ChatFooter = ({
                             onPaste={handlePaste}
                             rows={1}
                         />
-                        <div className="shrink-0 w-12 h-full" />
+                        <div className={`shrink-0 h-full ${controls ? "w-40" : "w-12"}`} />
                     </div>
+                    {controls && (
+                        <div className="absolute bottom-2 right-12 z-10">
+                            {controls}
+                        </div>
+                    )}
                     <Button
                         type={isLoading ? "button" : "submit"}
                         size="icon"

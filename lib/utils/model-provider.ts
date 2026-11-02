@@ -1,7 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { groq } from "@ai-sdk/groq";
 import { anthropic } from "@ai-sdk/anthropic";
-import { azure } from "@ai-sdk/azure";
 import {
     defaultSettingsMiddleware,
     extractReasoningMiddleware,
@@ -60,7 +59,6 @@ const reasoning = wrapLanguageModel({
 export enum ModelProvider {
     OpenAI = "OpenAI",
     Anthropic = "Anthropic",
-    Azure = "Azure",
     Groq = "Groq",
     Custom = "Custom",
     Other = "Other"
@@ -82,14 +80,11 @@ export type ModelKey =
     | "claudesonnet55"
     | "claudehaiku55"
     | "claudefable51"
-    | "azureGpt4o"
     | "gptoss120b"
     | "gptoss20b"
     | "qwen38_27b"
     | "gptLatest"
     | "claudeLatest"
-    | "azureLatest"
-    | "mathgpt"
     | "reasoning"
     | "auto"
     | "agents";
@@ -144,11 +139,6 @@ export const models: { [key in ModelKey]: ModelConfig } = {
         provider: ModelProvider.Anthropic,
         maxTokens: 128000
     },
-    azureGpt4o: {
-        model: "gpt-4o",
-        name: "GPT-4o",
-        provider: ModelProvider.Azure
-    },
     gptoss120b: {
         model: "openai/gpt-oss-120b",
         name: "GPT-OSS 120B (Groq)",
@@ -179,20 +169,6 @@ export const models: { [key in ModelKey]: ModelConfig } = {
         provider: ModelProvider.Anthropic,
         maxTokens: 128000
     },
-    azureLatest: {
-        model: "gpt-4o",
-        name: "GPT-4o",
-        provider: ModelProvider.Azure,
-        maxTokens: 16384
-    },
-
-    // Fine-tuned Models
-    mathgpt: {
-        model: process.env.MATHGPT_MODEL || "gpt-6-luna",
-        name: "MathGPT",
-        provider: ModelProvider.OpenAI,
-        maxTokens: 16384
-    },
 
     // Custom Models
     reasoning: {
@@ -216,9 +192,6 @@ export const getModel = (modelConfig: ModelConfig) => {
             break;
         case ModelProvider.Anthropic:
             baseModel = anthropic(modelConfig.model);
-            break;
-        case ModelProvider.Azure:
-            baseModel = azure.chat(modelConfig.model);
             break;
         case ModelProvider.Groq:
             // Groq returns reasoning as a separate field (parsed format by default)
