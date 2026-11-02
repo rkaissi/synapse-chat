@@ -1,66 +1,16 @@
 import { openai } from "@ai-sdk/openai";
 import { groq } from "@ai-sdk/groq";
 import { anthropic } from "@ai-sdk/anthropic";
-import {
-    defaultSettingsMiddleware,
-    extractReasoningMiddleware,
-    LanguageModelMiddleware,
-    wrapLanguageModel
-} from "ai";
+import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
+import { REASONING_LEVELS, ReasoningLevel } from "@/lib/types";
 
 export const embeddingModel = openai.embedding("text-embedding-3-small");
 export const imageModel = openai.image("gpt-image-2.5-flare");
-
-export const thinkingMiddleware: LanguageModelMiddleware = {
-    transformParams: async ({ params }) => {
-        return {
-            ...params,
-            prompt: params.prompt?.map((message, index) => {
-                if (
-                    index === params.prompt.length - 1 &&
-                    params.prompt[params.prompt.length - 1].role === "user"
-                ) {
-                    const content =
-                        params.prompt[params.prompt.length - 1].content;
-                    return {
-                        ...params.prompt[params.prompt.length - 1],
-                        content: Array.isArray(content)
-                            ? content.map((part) => {
-                                  if ("text" in part) {
-                                      return {
-                                          ...part,
-                                          text: `${part.text}\nMake sure to think step by step and wrap all your reasoning with <assistantThinking> tags. After your thinking, provide your final answer outside the <assistantThinking> tags. The final answer must stand alone.`
-                                      };
-                                  }
-                                  return part;
-                              })
-                            : content
-                    } as any;
-                }
-                return message;
-            })
-        };
-    }
-};
-
-const reasoning = wrapLanguageModel({
-    model: anthropic("claude-opus-5-5"),
-    middleware: defaultSettingsMiddleware({
-        settings: {
-            providerOptions: {
-                anthropic: {
-                    thinking: { type: "enabled", budgetTokens: 12000 }
-                }
-            }
-        }
-    })
-});
 
 export enum ModelProvider {
     OpenAI = "OpenAI",
     Anthropic = "Anthropic",
     Groq = "Groq",
-    Custom = "Custom",
     Other = "Other"
 }
 
@@ -69,6 +19,8 @@ export interface ModelConfig {
     name: string;
     provider: ModelProvider;
     maxTokens?: number;
+    // Highest reasoning effort the model accepts (default: xhigh)
+    maxReasoning?: ReasoningLevel;
 }
 
 export type ModelKey =
@@ -85,7 +37,6 @@ export type ModelKey =
     | "qwen38_27b"
     | "gptLatest"
     | "claudeLatest"
-    | "reasoning"
     | "auto"
     | "agents";
 
@@ -143,18 +94,24 @@ export const models: { [key in ModelKey]: ModelConfig } = {
         model: "openai/gpt-oss-120b",
         name: "GPT-OSS 120B (Groq)",
         provider: ModelProvider.Groq,
+        // Groq accepts low, medium and high
+        maxReasoning: "high",
         maxTokens: 65536
     },
     gptoss20b: {
         model: "openai/gpt-oss-20b",
         name: "GPT-OSS 20B (Groq)",
         provider: ModelProvider.Groq,
+        // Groq accepts low, medium and high
+        maxReasoning: "high",
         maxTokens: 65536
     },
     qwen38_27b: {
         model: "qwen/qwen3.8-27b",
         name: "Qwen 3.8 27B (Groq)",
         provider: ModelProvider.Groq,
+        // Groq accepts low, medium and high
+        maxReasoning: "high",
         maxTokens: 16384
     },
     gptLatest: {
@@ -168,13 +125,6 @@ export const models: { [key in ModelKey]: ModelConfig } = {
         name: "Claude Sonnet 5.5",
         provider: ModelProvider.Anthropic,
         maxTokens: 128000
-    },
-
-    // Custom Models
-    reasoning: {
-        model: "reasoning",
-        name: "Reasoning",
-        provider: ModelProvider.Custom
     },
 
     // Other
@@ -197,8 +147,6 @@ export const getModel = (modelConfig: ModelConfig) => {
             // Groq returns reasoning as a separate field (parsed format by default)
             baseModel = groq(modelConfig.model);
             break;
-        case ModelProvider.Custom:
-            return reasoning;
         default:
             throw new Error(
                 `Unsupported model provider: ${modelConfig.provider}`
@@ -214,17 +162,37 @@ export const getModel = (modelConfig: ModelConfig) => {
 export const unsupportedToolUseModels: Partial<ModelKey>[] = [];
 export const unsupportedArtifactUseModels: Partial<ModelKey>[] = [];
 
-// Models that support reasoning/thinking output. These are called without a temperature.
+// Models that reason (all chat models today). They get the reasoning effort
+// option and are called without temperature/topP, which they don't support
+// (Claude 5.x rejects sampling parameters entirely).
 export const reasoningModels: Partial<ModelKey>[] = [
     "gpt6astra",
     "gpt61sol",
     "gpt61terra",
     "gpt6luna",
-    "reasoning",
+    "gptLatest",
+    "claudeopus55",
+    "claudesonnet55",
+    "claudehaiku55",
+    "claudefable51",
+    "claudeLatest",
     "gptoss120b",
     "gptoss20b",
     "qwen38_27b"
 ];
+
+// Clamps a reasoning level to what the model accepts, so the SDK doesn't
+// have to remap it (it logs a warning when it does)
+export const clampReasoning = (
+    modelKey: ModelKey,
+    level: ReasoningLevel
+): ReasoningLevel => {
+    const max = models[modelKey]?.maxReasoning;
+    if (!max) return level;
+    return REASONING_LEVELS.indexOf(level) > REASONING_LEVELS.indexOf(max)
+        ? max
+        : level;
+};
 
 export const isReasoningModel = (modelKey: ModelKey): boolean => {
     return reasoningModels.includes(modelKey);
@@ -238,8 +206,7 @@ export const expensiveModels: ModelKey[] = [
     "gpt61sol",
     "gptLatest",
     "claudefable51",
-    "claudeopus55",
-    "reasoning"
+    "claudeopus55"
 ];
 
 export const expensiveModelsEnabled =

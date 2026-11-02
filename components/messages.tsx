@@ -1,4 +1,4 @@
-import { CombinedMessage, NewMessage } from "@/lib/types";
+import { AUTO_ROUTER_MODELS, CombinedMessage, NewMessage } from "@/lib/types";
 import { useCallback, useMemo, useState } from "react";
 import {
     Avatar,
@@ -503,6 +503,7 @@ export const AssistantMessage = ({
                                     <Tooltip>
                                         <TooltipTrigger className="flex align-middle">
                                             <Badge>
+                                                {message.autoRoute && "Auto · "}
                                                 {models[message.model]?.name}
                                             </Badge>
                                         </TooltipTrigger>
@@ -514,6 +515,19 @@ export const AssistantMessage = ({
                                                             ?.name
                                                     }
                                                 </span>
+                                                {message.autoRoute && (
+                                                    <span>
+                                                        Chosen by Auto:{" "}
+                                                        {message.autoRoute.reason},{" "}
+                                                        {message.autoRoute.reasoning} reasoning
+                                                    </span>
+                                                )}
+                                                {message.autoRoute?.classifier && (
+                                                    <span className="text-xs opacity-70">
+                                                        Classified by{" "}
+                                                        {AUTO_ROUTER_MODELS[message.autoRoute.classifier]}
+                                                    </span>
+                                                )}
                                                 <span>
                                                     Output Tokens:{" "}
                                                     {message.completionTokens ||

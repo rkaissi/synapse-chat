@@ -18,7 +18,7 @@ import {
     RepoConnection,
     Settings
 } from "@/lib/types";
-import { isReasoningModel, ModelKey } from "@/lib/utils/model-provider";
+import { ModelKey } from "@/lib/utils/model-provider";
 import ReasoningLevelSelect from "./reasoninglevelselect";
 import ChatHeader from "./chatheader";
 import ChatFooter from "./chatfooter";
@@ -83,12 +83,27 @@ const reducer = (state: Settings, action: Action): Settings => {
             return { ...state, toolChoice: action.payload };
         case "SET_REASONING_LEVEL":
             return { ...state, reasoningLevel: action.payload };
+        case "SET_AUTO_ROUTER_MODEL":
+            return { ...state, autoRouterModel: action.payload };
+        case "SET_AUTO_PRIORITY":
+            return { ...state, autoPriority: action.payload };
         default:
             return state;
     }
 };
 
-export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
+export function Chat({
+    userId,
+    chatId,
+    isNewChat = false
+}: {
+    userId: string;
+    chatId: string;
+    // Set by the home page. Existing chats (/chat/[id]) are loaded from the
+    // database; new ones aren't saved yet, so there is nothing to load. (The
+    // URL can't tell: after "New chat" it briefly still shows the old chat.)
+    isNewChat?: boolean;
+}) {
     const path = usePathname();
 
     // Settings and the sidebar state persist across chats and reloads
@@ -133,7 +148,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
     // Messages restored from the database are already processed and must not be
     // re-run through processMessage (it would apply the current settings to them)
     const loadedMessageIdsRef = useRef<Set<string>>(new Set());
-    const shouldLoadChatRef = useRef(false);
+    const shouldLoadChatRef = useRef(!isNewChat);
     const shouldSaveRef = useRef(false);
     const combinedMessagesRef = useRef<CombinedMessage[]>([]);
 
@@ -203,59 +218,54 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         regenerate({ body: { userId, settings: state, repo } });
     }, [regenerate, userId, state, repo]);
 
+    // A new chat gets its own URL once it has a message (without navigating,
+    // so this component stays mounted)
     useEffect(() => {
-        if (!path.includes("chat") && messages.length === 1) {
-            shouldLoadChatRef.current = false;
+        if (isNewChat && messages.length === 1 && !path.includes("chat")) {
             window.history.replaceState({}, "", `/chat/${chatId}`);
         }
+    }, [isNewChat, chatId, messages.length, path]);
 
-        if (path.includes("chat") && (!messages || messages.length === 0)) {
-            shouldLoadChatRef.current = true;
-        }
-    }, [chatId, messages, path]);
-
+    // Existing chats are loaded once, when the component mounts
     useEffect(() => {
         const loadExistingChat = async () => {
-            if (path.includes("chat") && chatId && shouldLoadChatRef.current) {
-                console.log("LOADING CHAT");
-                try {
-                    const response = await fetch(`/api/chat/${chatId}`);
-                    if (response.ok) {
-                        shouldLoadChatRef.current = false;
-
-                        const chatData = await response.json();
-                        const newCombinedMessages = chatData.messages.slice();
-                        repoRef.current = chatData.repo ?? null;
-                        setRepo(chatData.repo ?? null);
-                        loadedMessageIdsRef.current = new Set(
-                            newCombinedMessages.map(
-                                (message: CombinedMessage) => message.id
-                            )
-                        );
-                        setMessages(newCombinedMessages.map(toUIMessage));
-                        setCombinedMessages(newCombinedMessages);
-                        setArtifacts(
-                            newCombinedMessages
-                                ?.map(
-                                    (message: CombinedMessage) =>
-                                        message.artifact
-                                )
-                                .filter(
-                                    (artifact: Artifact | undefined) =>
-                                        artifact !== undefined
-                                ) as Artifact[]
-                        );
-                    } else {
-                        console.error("Failed to load chat data");
-                    }
-                } catch (error) {
-                    console.error("Error loading chat data:", error);
+            if (!shouldLoadChatRef.current) return;
+            shouldLoadChatRef.current = false;
+            try {
+                const response = await fetch(`/api/chat/${chatId}`);
+                if (response.status === 404) {
+                    // Deleted, or a link to a chat that was never saved
+                    console.warn(`Chat ${chatId} not found`);
+                    return;
                 }
+                if (!response.ok) {
+                    console.error(`Failed to load chat (HTTP ${response.status})`);
+                    return;
+                }
+
+                const chatData = await response.json();
+                const newCombinedMessages: CombinedMessage[] = chatData.messages.slice();
+                repoRef.current = chatData.repo ?? null;
+                setRepo(chatData.repo ?? null);
+                loadedMessageIdsRef.current = new Set(
+                    newCombinedMessages.map((message) => message.id)
+                );
+                setMessages(newCombinedMessages.map(toUIMessage));
+                setCombinedMessages(newCombinedMessages);
+                setArtifacts(
+                    newCombinedMessages
+                        .map((message) => message.artifact)
+                        .filter(
+                            (artifact): artifact is Artifact => artifact !== undefined
+                        )
+                );
+            } catch (error) {
+                console.error("Error loading chat data:", error);
             }
         };
 
         loadExistingChat();
-    }, [chatId, path, setMessages, shouldLoadChatRef]);
+    }, [chatId, setMessages]);
 
     useEffect(() => {
         if (combinedMessages.length > 0) {
@@ -360,7 +370,9 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
 
             const { cleanedContent, artifact, model } = processMessage(
                 latestContent,
-                combinedMessages[latestMessageIndex]?.model
+                // The model that answered (Auto's pick), else the previous value
+                latestMessage.metadata?.model ??
+                    combinedMessages[latestMessageIndex]?.model
             );
 
             const {
@@ -369,7 +381,8 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                 totalTokens,
                 cacheWriteTokens,
                 cacheReadTokens,
-                finishReason
+                finishReason,
+                autoRoute
             } = latestMessage.metadata ?? {};
             const reasoning = getMessageReasoning(latestMessage) || undefined;
 
@@ -401,6 +414,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                         totalTokens,
                         finishReason,
                         reasoning,
+                        autoRoute,
                         states: [
                             ...newCombinedMessages[regeneratedIndex].states,
                             {
@@ -441,6 +455,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             cacheReadTokens ?? existing.cacheReadTokens,
                         finishReason: finishReason ?? existing.finishReason,
                         reasoning: reasoning ?? existing.reasoning,
+                        autoRoute: autoRoute ?? existing.autoRoute,
                         states: [
                             ...newCombinedMessages[
                                 existingMessageIndex
@@ -470,6 +485,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                         cacheReadTokens,
                         finishReason,
                         reasoning,
+                        autoRoute,
                         states: [
                             {
                                 content: cleanedContent || "",
@@ -500,9 +516,16 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
             latestMessage !== lastProcessedMessageRef.current &&
             !loadedMessageIdsRef.current.has(latestMessage.id)
         ) {
-            processMessages();
-
-            lastProcessedMessageRef.current = latestMessage;
+            // Processed in the next frame, not in the effect: setting state from
+            // an effect on every streamed update chains synchronous re-renders,
+            // and with a long artifact each pass takes longer than the stream's
+            // throttle, so React hits its nested update limit. A frame also
+            // merges bursts (only the latest message is processed).
+            const frame = requestAnimationFrame(() => {
+                lastProcessedMessageRef.current = latestMessage;
+                processMessages();
+            });
+            return () => cancelAnimationFrame(frame);
         }
     }, [
         messages,
@@ -513,9 +536,14 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
         save
     ]);
 
+    // Also a frame later, so the final update is processed (scheduled above,
+    // and frames run in order) before the chat is saved
     useEffect(() => {
         if ((status === "ready" || status === "error") && shouldSaveRef.current) {
-            save();
+            const frame = requestAnimationFrame(() => {
+                if (shouldSaveRef.current) save();
+            });
+            return () => cancelAnimationFrame(frame);
         }
     }, [status, save]);
 
@@ -622,8 +650,7 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                             className="grow w-full h-full overflow-y-auto justify-center transition-all duration-300"
                         >
                             <div className="shrink h-full p-4 space-y-4 max-w-[700px] mx-auto">
-                                {combinedMessages.length === 0 &&
-                                !path.includes("chat") ? (
+                                {combinedMessages.length === 0 && isNewChat ? (
                                     <DefaultPrompts addMessage={addMessage} />
                                 ) : (
                                     <Messages
@@ -669,9 +696,8 @@ export function Chat({ userId, chatId }: { userId: string; chatId: string }) {
                                 />
                             }
                             controls={
-                                (isReasoningModel(state.model) ||
-                                    state.model === "auto" ||
-                                    state.model === "agents") && (
+                                // Auto picks the reasoning effort per message
+                                state.model !== "auto" && (
                                     <ReasoningLevelSelect
                                         compact
                                         value={state.reasoningLevel}

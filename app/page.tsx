@@ -18,5 +18,5 @@ export default function Page() {
         return () => window.removeEventListener(NEW_CHAT_EVENT, startNewChat);
     }, []);
 
-    return <Chat key={chatId} userId={userId} chatId={chatId} />;
+    return <Chat key={chatId} userId={userId} chatId={chatId} isNewChat />;
 }

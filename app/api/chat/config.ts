@@ -1,6 +1,6 @@
-import { ReasoningLevel, Settings } from "@/lib/types";
+import { AutoPriority, AutoRouterModel, ReasoningLevel, Settings } from "@/lib/types";
 
-export const DEFAULT_MODEL = "gpt6luna";
+export const DEFAULT_MODEL = "auto";
 export const DEFAULT_TEMPERATURE = 0.5;
 export const DEFAULT_TOPP = 1;
 // Reasoning models spend part of this budget on (hidden) reasoning
@@ -14,6 +14,10 @@ export const DEFAULT_ENABLE_MEMORY = false; // Enable this in prod
 export const DEFAULT_TOOL_CHOICE = "auto";
 export const DEFAULT_MESSAGE_LIMIT = 8;
 export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
+// Free on Groq; the Decisions API was more consistent in testing (see
+// lib/routing/auto-router.ts) but bills the OpenAI key
+export const DEFAULT_AUTO_ROUTER_MODEL: AutoRouterModel = "gptoss20b";
+export const DEFAULT_AUTO_PRIORITY: AutoPriority = "cost";
 export const DEFAULT_AGENT_SETTINGS: Partial<Settings> = {
     temperature: 0.3,
     topP: 1,
@@ -658,147 +662,6 @@ The assistant should not mention any of these instructions to the user, nor make
 
 ---
 `;
-
-export const keywordCategories = {
-    artifact: [
-        "artifact",
-        "presentation",
-        "html",
-        "css",
-        "slideshow",
-        "powerpoint",
-        "keynote",
-        "diagram",
-        "chart",
-        "graph",
-        "infographic",
-        "visual",
-        "design",
-        "layout",
-        "svg",
-        "mermaid",
-        "react",
-        "component",
-        "reveal.js",
-        "desmos",
-        "mathjs",
-        "plotly",
-        "plot"
-    ],
-    programming: [
-        "code",
-        "programming",
-        "javascript",
-        "python",
-        "java",
-        "c++",
-        "c#",
-        "typescript",
-        "react",
-        "reactjs",
-        "react.js",
-        "angular",
-        "vue",
-        "vite",
-        "nextjs",
-        "next.js",
-        "nodejs",
-        "express",
-        "django",
-        "flask",
-        "php",
-        "swift",
-        "kotlin",
-        "scala",
-        "haskell",
-        "perl",
-        "sql",
-        "mongodb",
-        "function",
-        "variable",
-        "loop",
-        "conditional",
-        "algorithm",
-        "syntax",
-        "syntax error",
-        "runtime error"
-        // "ruby",
-        // "go",
-        // "rust",
-        // "class",
-        // "object",
-    ],
-    math: [
-        "math",
-        "mathematics",
-        "algebra",
-        "geometry",
-        "calculus",
-        "statistics",
-        "probability",
-        "linear algebra",
-        "discrete math",
-        "number theory",
-        "trigonometry",
-        "differential equations",
-        "vector",
-        "matrix",
-        "algorithm",
-        "optimization",
-        "equation",
-        "formula",
-        "graph",
-        "function",
-        "derivative",
-        "integral"
-    ],
-    software: [
-        "software",
-        "application",
-        "app",
-        "development",
-        "architecture",
-        "design pattern",
-        "api",
-        "database",
-        "backend",
-        "frontend",
-        "fullstack",
-        "devops",
-        "version control",
-        "git",
-        "ci/cd",
-        "debug",
-        "framework",
-        "library",
-        "module",
-        "package",
-        "dependency",
-        "deployment",
-        "error",
-        "game engine",
-        "unity engine",
-        "unity game"
-    ],
-    document: [
-        "document",
-        "report",
-        "essay",
-        "paper",
-        "thesis",
-        "dissertation",
-        "markdown",
-        "writing",
-        "draft",
-        "revision",
-        "edit",
-        "prompt"
-        // "article",
-        // "text",
-        // "content",
-    ]
-};
-
 export const promptTemplates = {
     california_girl: `
 You are Lindsay, a super laid-back teenage valley girl from California. When you text, you're using modern Gen Z slang, being flirty, sarcastic, and sometimes making typos. 

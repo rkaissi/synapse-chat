@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "docs:auto-routing": "node --no-warnings scripts/auto-routing-table.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.94",

@@ -1,4 +1,4 @@
-import { ModelKey } from "@/lib/utils/model-provider";
+import type { ModelKey } from "@/lib/utils/model-provider";
 import { UIMessage } from "ai";
 
 export interface Artifact {
@@ -56,8 +56,28 @@ export interface RepoConnection {
     fileCount: number;
 }
 
-// Per-message metadata streamed from /api/chat
-export type ChatMetadata = Omit<Data, "chatId" | "reasoning">;
+// How Auto mode routed a message (lib/routing/auto-router.ts)
+export interface AutoRoute {
+    model: ModelKey;
+    reasoning: ReasoningLevel;
+    task: string;
+    difficulty: string;
+    // "classifier": a small model decided; "heuristic": it failed or timed
+    // out; "fast-path": obviously trivial, no classifier call
+    source: "classifier" | "heuristic" | "fast-path";
+    // Which classifier made the call (when source is "classifier")
+    classifier?: AutoRouterModel;
+    // The routing policy used
+    priority?: AutoPriority;
+    reason: string;
+}
+
+// Per-message metadata streamed from /api/chat. `model` is the model that
+// actually answered (the routed one in Auto mode).
+export type ChatMetadata = Omit<Data, "chatId" | "reasoning"> & {
+    model?: ModelKey;
+    autoRoute?: AutoRoute;
+};
 
 export type ChatUIMessage = UIMessage<ChatMetadata>;
 
@@ -93,6 +113,8 @@ export type CombinedMessage = {
     attachments?: Attachment[];
     artifact?: Artifact;
     model?: ModelKey;
+    // Set when Auto picked the model
+    autoRoute?: AutoRoute;
     toolInvocations?: ToolInvocation[];
     completionTokens?: number;
     promptTokens?: number;
@@ -122,12 +144,35 @@ export type Settings = {
     enablePasteToFile: boolean;
     customInstructions: string;
     toolChoice: ToolChoice;
-    // Reasoning effort for reasoning models (GPT-6, GPT-OSS, Qwen)
+    // Reasoning effort for every model (Auto picks its own)
     reasoningLevel: ReasoningLevel;
+    // What classifies requests in Auto mode
+    autoRouterModel: AutoRouterModel;
+    // Which routing policy Auto uses
+    autoPriority: AutoPriority;
 };
 
-export const REASONING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"] as const;
+// Supported by every chat model (GPT-6, Claude 5.x, Groq); "minimal" and
+// "none" are not
+export const REASONING_LEVELS = ["low", "medium", "high", "xhigh"] as const;
 export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
+
+// Models that can classify requests for Auto (lib/routing/auto-router.ts).
+// The Groq models run on Groq's free tier; Decisions bills the OpenAI key.
+export const AUTO_ROUTER_MODELS = {
+    gptoss20b: "GPT-OSS 20B",
+    qwen38_27b: "Qwen 3.8 27B",
+    decisions: "Luna Decisions"
+} as const;
+export type AutoRouterModel = keyof typeof AUTO_ROUTER_MODELS;
+
+// How Auto trades cost against quality (lib/routing/policy.ts,
+// docs/AUTO_ROUTING.md)
+export const AUTO_PRIORITIES = {
+    cost: "Cost",
+    performance: "Performance"
+} as const;
+export type AutoPriority = keyof typeof AUTO_PRIORITIES;
 
 export type Action =
     | { type: "SET_CHAT_ID"; payload: string | null }
@@ -145,7 +190,9 @@ export type Action =
     | { type: "SET_ENABLE_MEMORY"; payload: boolean }
     | { type: "SET_CUSTOM_INSTRUCTIONS"; payload: string }
     | { type: "SET_TOOL_CHOICE"; payload: ToolChoice }
-    | { type: "SET_REASONING_LEVEL"; payload: ReasoningLevel };
+    | { type: "SET_REASONING_LEVEL"; payload: ReasoningLevel }
+    | { type: "SET_AUTO_ROUTER_MODEL"; payload: AutoRouterModel }
+    | { type: "SET_AUTO_PRIORITY"; payload: AutoPriority };
 
 export interface WikipediaSearchResult {
     id: number;

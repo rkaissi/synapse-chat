@@ -35,8 +35,9 @@ A full pass over the interface. Known issues and ideas collected so far:
 
 ### Model routing and providers
 
-- [ ] Overhaul Auto routing. Today `determineModel` substring-matches the last message against ~127 keywords (`keywordCategories` in `app/api/chat/config.ts`): any hit routes to GPT-6.1 Sol, otherwise GPT-6 Luna. Substring matching misfires ("app" matches "happy", "code" matches "decode") and ignores conversation context. Options: a cheap classifier call (Luna with `Output.choice`), routing on attachments/tools/length, or letting the user pick a speed/quality preference.
-- [ ] Replace the hand-written `getModel` switch with the AI SDK's built-in `createProviderRegistry` + `customProvider`. They support model aliases ("fast", "smart", "reasoning"), per-alias middleware and default settings, and `provider:model` ids. The custom "Reasoning" model then becomes an alias (e.g. Opus 5.5 with `reasoning: "high"`) instead of a special provider case. Optionally the Vercel AI Gateway (one key, `openai/gpt-6-luna` style ids).
+- [x] Overhaul Auto routing: a classifier (OpenAI Decisions API on GPT-6 Luna) plus rules picks the model and reasoning effort per message (`lib/routing/auto-router.ts`)
+- [ ] Auto: let users pick a speed/quality preference, and learn from regenerations (a regenerate after a cheap pick could route the retry higher)
+- [ ] Replace the hand-written `getModel` switch with the AI SDK's built-in `createProviderRegistry` + `customProvider`. They support model aliases ("fast", "smart", "reasoning"), per-alias middleware and default settings, and `provider:model` ids. Optionally the Vercel AI Gateway (one key, `openai/gpt-6-luna` style ids).
 
 ### Web search
 

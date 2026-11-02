@@ -8,6 +8,8 @@ import {
     DEFAULT_ENABLE_SAFEGUARDS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MESSAGE_LIMIT,
+    DEFAULT_AUTO_PRIORITY,
+    DEFAULT_AUTO_ROUTER_MODEL,
     DEFAULT_MODEL,
     DEFAULT_REASONING_LEVEL,
     DEFAULT_TEMPERATURE,
@@ -15,7 +17,12 @@ import {
     DEFAULT_TOPP
 } from "@/app/api/chat/config";
 import { isModelAvailable, models } from "@/lib/utils/model-provider";
-import { Settings } from "@/lib/types";
+import {
+    AUTO_PRIORITIES,
+    AUTO_ROUTER_MODELS,
+    REASONING_LEVELS,
+    Settings
+} from "@/lib/types";
 
 // User preferences (chat settings and the desktop sidebar state), kept in
 // localStorage so they survive new chats and reloads
@@ -43,7 +50,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
         enableMemory: DEFAULT_ENABLE_MEMORY,
         toolChoice: DEFAULT_TOOL_CHOICE,
         customInstructions: "",
-        reasoningLevel: DEFAULT_REASONING_LEVEL
+        reasoningLevel: DEFAULT_REASONING_LEVEL,
+        autoRouterModel: DEFAULT_AUTO_ROUTER_MODEL,
+        autoPriority: DEFAULT_AUTO_PRIORITY
     },
     sidebarOpen: true
 };
@@ -64,6 +73,16 @@ const read = (): Preferences => {
     // A stored model may have been removed or disabled since
     if (!(settings.model in models) || !isModelAvailable(settings.model)) {
         settings.model = DEFAULT_MODEL;
+    }
+    // "minimal" was removed as a level
+    if (!REASONING_LEVELS.includes(settings.reasoningLevel)) {
+        settings.reasoningLevel = DEFAULT_REASONING_LEVEL;
+    }
+    if (!(settings.autoRouterModel in AUTO_ROUTER_MODELS)) {
+        settings.autoRouterModel = DEFAULT_AUTO_ROUTER_MODEL;
+    }
+    if (!(settings.autoPriority in AUTO_PRIORITIES)) {
+        settings.autoPriority = DEFAULT_AUTO_PRIORITY;
     }
     cache = {
         settings,

@@ -2,6 +2,7 @@ import React, {
     useState,
     useCallback,
     useEffect,
+    useLayoutEffect,
     useRef,
     useMemo,
     RefObject
@@ -221,6 +222,30 @@ export function ArtifactsWindow({
         }
     }, [currentArtifact, currentArtifactIndex, activeTab, setConsoleLogs, isOpen]);
 
+    // The code view follows a streaming artifact while the reader is at its
+    // bottom (scrolling up stops following, scrolling back down resumes it),
+    // independently of the chat
+    const codeScrollRef = useRef<HTMLDivElement>(null);
+    const followCodeRef = useRef(true);
+    const handleCodeScroll = useCallback(() => {
+        const element = codeScrollRef.current;
+        if (!element) return;
+        followCodeRef.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+    }, []);
+
+    // A new artifact starts out following
+    useEffect(() => {
+        followCodeRef.current = true;
+    }, [currentArtifactIndex]);
+
+    useLayoutEffect(() => {
+        const element = codeScrollRef.current;
+        if (element && isStreamingArtifactRef.current && followCodeRef.current) {
+            element.scrollTop = element.scrollHeight;
+        }
+    }, [currentArtifact?.content, activeTab, isStreamingArtifactRef]);
+
     const renderCode = useCallback((artifact: Artifact) => {
         const language =
             artifact.language ||
@@ -249,7 +274,11 @@ export function ArtifactsWindow({
 
         return (
             <div className="h-full overflow-hidden bg-[#282c34] font-mono text-sm leading-relaxed">
-                <div className="overflow-auto h-full">
+                <div
+                    ref={codeScrollRef}
+                    onScroll={handleCodeScroll}
+                    className="overflow-auto h-full"
+                >
                     <table className="w-full border-collapse">
                         <tbody>
                             <tr>
@@ -278,17 +307,7 @@ export function ArtifactsWindow({
                 </div>
             </div>
         );
-    }, []);
-
-    useEffect(() => {
-        if (
-            currentArtifact &&
-            (activeTab === "code" ||
-                currentArtifact.type === "application/code")
-        ) {
-            renderCode(currentArtifact);
-        }
-    }, [currentArtifact, activeTab, renderCode]);
+    }, [handleCodeScroll]);
 
     if (!isOpen) return null;
 
