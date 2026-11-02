@@ -2,6 +2,63 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-01 — Artifact isolation, chat scrolling, compact repo control
+
+- **An HTML artifact restyled the whole app** (a green border and changed margins after an agents run built a Snake game). Two causes, both fixed without removing anything from the artifact:
+  - The Debugger agent returned the whole page as plain text, and messages/agent results were rendered as HTML, so the page's `<style>` applied to the app. HTML documents and `<style>` blocks outside code blocks are now shown as code (`fenceRawHtml` in `lib/utils/markdown-to-html.ts`, also while streaming). The live version is in the artifact preview.
+  - The HTML preview iframe allowed `allow-scripts` together with `allow-same-origin`, which lets artifact scripts reach the app through `window.parent`. It now runs without `allow-same-origin` (an opaque origin, as on claude.ai), and console output is forwarded by a script placed inside the artifact (`lib/utils/capture-logs.ts`). Artifacts render exactly as before; they just can't touch the app. One side effect: an artifact's `localStorage` is unavailable, so e.g. a game's best score isn't kept.
+- **The console capture leaked listeners**: its cleanup was never called and the effect re-ran on every new log line, so each log added another listener.
+- **The chat was locked to the bottom while anything streamed.** It now follows new output only while you're at the bottom: scrolling up stops following, scrolling back to the bottom or sending a message resumes it, and a streaming artifact never moves the chat.
+- **The GitHub connect bar is now a button in the message box.** It opens a small popover to connect; once connected it shows the repository as a chip (details and Disconnect in the popover). The full-width bar above the chat is gone.
+- **`NEXT_PUBLIC_ENABLE_EXPENSIVE_MODELS`**: GPT-6 Astra, GPT-6.1 Sol, Claude Fable 5.1, Claude Opus 5.5 and Reasoning are only offered when it is `true`. Leave it unset on a public deployment: the picker hides them, the chat route rejects them (403), saved preferences fall back to the default, and Auto's heavy path uses GPT-6.1 Terra instead of Sol.
+
+## 2026-11-01 — Reasoning level, persistent settings, agent fixes
+
+### Agents
+
+- **Large results failed with "No object generated: could not parse the response"** (e.g. "create a tetris artifact"). Agents had a 4,096-token output limit, and for reasoning models (GPT-6) the hidden reasoning counts against it, so the Programmer's JSON was cut off mid-code. The SDK throws that error from `generateText` itself, which the retry didn't catch. Budgets are now 16k per agent (Writer 32k, Programmer 64k), a cut-off or unparseable response is retried once, with double the budget when it ran out, and errors name the agent. Re-tested with the same prompt: the run completed (including a revision round) and produced a Tetris artifact that renders in the artifacts panel.
+- **The chat model only gets the agents' deliverables**: each agent's latest result without its thinking, plus the Supervisor's open concerns if a revision was still requested (`summarizeRunForModel`). Plans, reviews and thinking stay in the agent card. This matches how other frameworks hand subagent results back: Claude Code and Codex subagents return only their final message, OpenAI Agents SDK agents-as-tools return their final output, and LangGraph's supervisor defaults to the last message. On failure the model also gets the error.
+- **Artifacts work in agents mode** (the artifact prompt is included and the settings menu is no longer disabled for Agents).
+- The Programmer now runs on GPT-6.1 Terra (was Sol), like the Writer.
+- Reasoning effort: Luna roles run on high, the Programmer and Writer (Terra) on medium.
+
+### Settings
+
+- **Reasoning level** (minimal, low, medium, high, extra high; default medium) in the settings menu and as a compact picker in the message box. It is passed as the AI SDK's `reasoning` option to reasoning models (GPT-6, GPT-OSS, Qwen; the custom Reasoning model keeps its own thinking budget).
+- **Settings persist** across new chats and reloads (localStorage, `lib/hooks/use-preferences.ts`). Only changed settings are stored, so new defaults still apply to everything else.
+- **Artifacts are on by default.** Default max output is 32,000 tokens (was 4,096) and agents mode's chat model also gets 32,000; requests are capped at the model's own limit.
+- Removed MathGPT and Azure GPT-4o (and the `@ai-sdk/azure` dependency).
+
+### Bugs fixed
+
+- **The sidebar reopened on every new chat and reload**: its state lived in the chat component, which remounts for each chat. It is now a persisted preference on desktop; on small screens, where the sidebar covers the chat, it starts closed.
+- **"Maximum update depth exceeded" while long replies streamed**: every streamed chunk re-ran message processing, which sets state again; a fast burst of chunks (long code) exceeded React's nested update limit. Updates are now throttled to every 50 ms. The message box's resize effect also re-ran on every streamed chunk (it depended on a handler recreated each render).
+- The settings menu clamped Max Tokens to 4,096 whenever Auto or Agents was selected (they have no limit of their own), and its tool choice dropdown ignored the saved value.
+
+## 2026-11-01 — Agents mode overhaul
+
+Choosing **Agents** in the model dropdown now shows the team working live inside the chat, instead of a list of raw messages that appeared only after every agent had finished.
+
+- **Agent team card**, above the reply: while the agents work it stays open and shows who is doing what ("Logician is working on a task…") with a live timer; once they finish it collapses to a summary (tasks completed, steps, time, the agents involved) and the answer streams in below. Click to reopen.
+- **Network graph**: the Project Manager at the top, the Supervisor at the bottom, specialists in between. The active agent pulses and the current hand-off (delegation or review) animates along its edge; agents outside the plan fade out, finished ones get a check.
+- Tabs:
+  - **Activity**: a timeline of every step with the agent, its model, duration, assignment, a collapsible thought process and the result. Code, bug lists, fact-check issues and the Supervisor's verdict (approved / revision requested) each get their own presentation instead of raw JSON, and revision rounds are marked.
+  - **Plan**: the task list with per-task status (queued, working, in review, approved, needs revision) and progress.
+  - **Team**: every agent with its model, what it did and for how long.
+  - **Trace**: a waterfall of every step on a shared time axis.
+- Chats saved before this change render in the same card (without timings).
+
+How it works: `AgentNetwork.executePrompt` takes an `onEvent` callback and an abort signal (`lib/agents/events.ts`). `call_agents` is now a streaming tool: it folds events into a run snapshot (`lib/agents/run-state.ts`) and yields it after each event, which the AI SDK delivers to the chat as preliminary tool results. The model itself only receives a summary (`toModelOutput`, see the entry above). Stopping the chat aborts the in-flight agent call.
+
+An `/agents` page was briefly built for this and then dropped in favor of the chat.
+
+Bugs found and fixed while testing:
+
+- **The plan disappeared from progress updates**: the network handed out its live task list, which it empties as tasks complete.
+
+- **Prices rendered as LaTeX everywhere** (chat messages included): any two `$` signs in a message became inline math, so "the ball costs $0.05 and the bat $1.05" turned into a garbled formula. Inline `$…$` math now follows Pandoc's rule (no space after the opening `$`, none before the closing `$`, no digit right after it). The same regex also excluded the letter "D" from math, so `$D = 5$` never rendered.
+- The Tailwind config replaces the default palette and had no `slate`, `red-50` or `indigo-50`; they were added (existing colors are unchanged).
+
 ## 2026-11-01 — Agent models
 
 - The two roles that used Claude Opus 5.5 now use OpenAI models: **Programmer → GPT-6.1 Sol** (near-Astra quality for complex work) and **Writer → GPT-6.1 Terra** (fast, clear natural writing). All other roles stay on GPT-6 Luna. Each was tested with one agent call and returned a valid structured result.

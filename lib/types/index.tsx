@@ -122,7 +122,12 @@ export type Settings = {
     enablePasteToFile: boolean;
     customInstructions: string;
     toolChoice: ToolChoice;
+    // Reasoning effort for reasoning models (GPT-6, GPT-OSS, Qwen)
+    reasoningLevel: ReasoningLevel;
 };
+
+export const REASONING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"] as const;
+export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
 
 export type Action =
     | { type: "SET_CHAT_ID"; payload: string | null }
@@ -139,7 +144,8 @@ export type Action =
     | { type: "SET_ENABLE_PASTE_TO_FILE"; payload: boolean }
     | { type: "SET_ENABLE_MEMORY"; payload: boolean }
     | { type: "SET_CUSTOM_INSTRUCTIONS"; payload: string }
-    | { type: "SET_TOOL_CHOICE"; payload: ToolChoice };
+    | { type: "SET_TOOL_CHOICE"; payload: ToolChoice }
+    | { type: "SET_REASONING_LEVEL"; payload: ReasoningLevel };
 
 export interface WikipediaSearchResult {
     id: number;

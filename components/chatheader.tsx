@@ -17,7 +17,6 @@ import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import {
     BlendIcon,
     BookOpenIcon,
-    CalculatorIcon,
     GaugeIcon,
     LayoutPanelLeftIcon,
     LightbulbIcon,
@@ -33,7 +32,7 @@ import {
     FishSymbolIcon
 } from "lucide-react";
 import { AutoIcon, SparkleIcon, ZapIcon } from "./icons";
-import { ModelKey, ModelProvider } from "@/lib/utils/model-provider";
+import { isModelAvailable, ModelKey, ModelProvider } from "@/lib/utils/model-provider";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { dispatchNewChat } from "@/lib/utils/new-chat";
@@ -122,13 +121,6 @@ export const modelInfo: Partial<
         icon: BlendIcon,
         provider: ModelProvider.Groq
     },
-    mathgpt: {
-        name: "MathGPT",
-        description:
-            "Custom GPT-4o mini model that excels at advanced math questions.",
-        icon: CalculatorIcon,
-        provider: ModelProvider.Other
-    },
     reasoning: {
         name: "Reasoning",
         description: "Custom Reasoning Model.",
@@ -183,7 +175,8 @@ const ChatHeader = ({
 
     const groupedModels = useMemo(() => {
         return Object.entries(modelInfo).reduce((acc, [key, value]) => {
-            if (value) {
+            // Premium models are hidden unless enabled (see isModelAvailable)
+            if (value && isModelAvailable(key as ModelKey)) {
                 const provider = value.provider;
                 if (!acc[provider]) {
                     acc[provider] = [];
@@ -304,7 +297,6 @@ const ChatHeader = ({
                         size="icon"
                         onClick={onOpenSettings}
                         aria-label="Open settings"
-                        disabled={selectedModel === "agents"}
                     >
                         <SettingsIcon className="h-4 w-4" />
                     </Button>

@@ -117,12 +117,6 @@ Make sure to replace any placeholders in the `.env.example` file with your actua
 | Claude Haiku 5.5  | `claudehaiku55`  | 128,000    |
 | Claude Fable 5.1  | `claudefable51`  | 128,000    |
 
-### Azure
-
-| Model Name   | Model Key      | Max Tokens |
-|--------------|----------------|------------|
-| GPT-4o       | `azureGpt4o`   | 16,384     |
-
 ### Groq
 
 | Model Name                           | Model Key                      | Max Tokens |
@@ -135,7 +129,6 @@ Make sure to replace any placeholders in the `.env.example` file with your actua
 
 | Model Name   | Model Key    | Max Tokens |
 |--------------|--------------|------------|
-| MathGPT      | `mathgpt`    | 16,384     |
 | Auto         | `auto`       | -          |
 | Agents       | `agents`     | -          |
 | Reasoning    | `reasoning`  | -          |

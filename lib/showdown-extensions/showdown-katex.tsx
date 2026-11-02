@@ -41,8 +41,15 @@ const showdownKatex = (options = {}) => {
                 config.delimiters.forEach(({ left, right, display }) => {
                     const escapedLeft = left.replace(/\$/g, "¨D");
                     const escapedRight = right.replace(/\$/g, "¨D");
+                    // Content can't contain a $ (showdown escapes it as ¨D)
+                    const content = "((?:(?!¨D)[\\s\\S])+?)";
+                    // Inline math follows Pandoc's rule so prices like
+                    // "$5 and $10" stay text: no space after the opening $,
+                    // none before the closing $, and no digit right after it
                     const regex = new RegExp(
-                        `${escapedLeft}([^¨D]+?)${escapedRight}`,
+                        display
+                            ? `${escapedLeft}${content}${escapedRight}`
+                            : `${escapedLeft}(?!\\s)${content}(?<!\\s)${escapedRight}(?!\\d)`,
                         "g"
                     );
 

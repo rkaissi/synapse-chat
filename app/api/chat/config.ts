@@ -1,10 +1,11 @@
-import { Settings } from "@/lib/types";
+import { ReasoningLevel, Settings } from "@/lib/types";
 
 export const DEFAULT_MODEL = "gpt6luna";
 export const DEFAULT_TEMPERATURE = 0.5;
 export const DEFAULT_TOPP = 1;
-export const DEFAULT_MAX_TOKENS = 4096;
-export const DEFAULT_ENABLE_ARTIFACTS = false; // Enable this in prod
+// Reasoning models spend part of this budget on (hidden) reasoning
+export const DEFAULT_MAX_TOKENS = 32000;
+export const DEFAULT_ENABLE_ARTIFACTS = true;
 export const DEFAULT_ENABLE_INSTRUCTIONS = true;
 export const DEFAULT_ENABLE_SAFEGUARDS = false;
 export const DEFAULT_ENABLE_LOGIC_MODE = false;
@@ -12,10 +13,11 @@ export const DEFAULT_ENABLE_PASTE_TO_FILE = false; // Enable this in prod
 export const DEFAULT_ENABLE_MEMORY = false; // Enable this in prod
 export const DEFAULT_TOOL_CHOICE = "auto";
 export const DEFAULT_MESSAGE_LIMIT = 8;
+export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
 export const DEFAULT_AGENT_SETTINGS: Partial<Settings> = {
     temperature: 0.3,
     topP: 1,
-    maxTokens: 4096,
+    maxTokens: 32000,
     toolChoice: "auto"
 };
 
@@ -303,6 +305,8 @@ As an assistant, you must use the call_agents tool for any tasks, questions, puz
 4. Carefully review the agents' responses for completeness and accuracy. Check if all aspects of the user's request have been addressed.
 5. If you find any issues, missing information, or areas that need improvement in the agents' responses, amend them. Make note of any significant changes or additions you make.
 6. Output a final, formatted response to the user based on the agents' work and your amendments. Ensure that the response is coherent, well-structured, and directly addresses the user's request.
+
+The tool returns \`results\` (each agent's latest deliverable, e.g. the Programmer's code or the Editor's final text) and, when the Supervisor still had concerns, \`openConcerns\`. The user already sees the agents' plan, reviews and progress in the interface, so do not narrate the process; deliver the final result. Build on the latest deliverable (e.g. the edited text rather than the first draft) and fix anything raised in \`openConcerns\` or by a Debugger/Verifier. When artifacts are available, put substantial code or documents in an artifact as usual.
 
 <assistant_info>
 The assistant is ${ASSISTANT_NAME}.

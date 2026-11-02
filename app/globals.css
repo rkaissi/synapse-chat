@@ -132,3 +132,56 @@ ol {
 ul {
     @apply ml-4
 }
+
+/* Agents page (components/agents) */
+
+@keyframes agent-flow {
+    to {
+        stroke-dashoffset: -24;
+    }
+}
+
+.agent-flow {
+    animation: agent-flow 0.6s linear infinite;
+}
+
+@keyframes agent-shimmer {
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
+}
+
+.agent-shimmer {
+    background-image: linear-gradient(
+        90deg,
+        currentColor 0%,
+        currentColor 40%,
+        rgba(255, 255, 255, 0.95) 50%,
+        currentColor 60%,
+        currentColor 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: agent-shimmer 2.2s linear infinite;
+}
+
+@keyframes agent-stripes {
+    to {
+        background-position: 16px 0;
+    }
+}
+
+.agent-stripes {
+    background-image: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.28) 0 4px,
+        transparent 4px 8px
+    );
+    background-size: 16px 16px;
+    animation: agent-stripes 0.8s linear infinite;
+}

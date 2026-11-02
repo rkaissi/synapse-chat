@@ -51,7 +51,22 @@ const config: Config = {
                 800: "#2d3748",
                 900: "#1a202c"
             },
+            // Tailwind's default slate (used by the agents page)
+            slate: {
+                50: "#f8fafc",
+                100: "#f1f5f9",
+                200: "#e2e8f0",
+                300: "#cbd5e1",
+                400: "#94a3b8",
+                500: "#64748b",
+                600: "#475569",
+                700: "#334155",
+                800: "#1e293b",
+                900: "#0f172a",
+                950: "#020617"
+            },
             red: {
+                50: "#fef2f2",
                 100: "#fff5f5",
                 200: "#fed7d7",
                 300: "#feb2b2",
@@ -178,6 +193,7 @@ const config: Config = {
                 900: "#2a4365"
             },
             indigo: {
+                50: "#eef2ff",
                 100: "#ebf4ff",
                 200: "#c3dafe",
                 300: "#a3bffa",

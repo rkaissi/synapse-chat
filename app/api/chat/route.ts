@@ -9,6 +9,7 @@ import {
 } from "ai";
 import {
     getModel,
+    isModelAvailable,
     isReasoningModel,
     ModelKey,
     models,
@@ -19,7 +20,9 @@ import { createAgentsTool, tools, artifactExtractionMiddleware } from "./tools";
 import buildPrompt from "./prompt-builder";
 import {
     agentsPrompt,
+    artifactPrompt,
     DEFAULT_AGENT_SETTINGS,
+    DEFAULT_REASONING_LEVEL,
     keywordCategories,
     maxSteps,
     toolsPrompt
@@ -59,7 +62,8 @@ const determineModel = (
     }
 
     if (model === "auto") {
-        return shouldUseAdvancedModel(lastMessage) ? "gpt61sol" : "gpt6luna";
+        if (!shouldUseAdvancedModel(lastMessage)) return "gpt6luna";
+        return isModelAvailable("gpt61sol") ? "gpt61sol" : "gpt61terra";
     }
 
     return model;
@@ -118,8 +122,16 @@ export async function POST(req: Request) {
         enableLogicMode,
         enableMemory,
         customInstructions,
-        toolChoice
+        toolChoice,
+        reasoningLevel = DEFAULT_REASONING_LEVEL
     } = settings;
+
+    if (!isModelAvailable(model)) {
+        return Response.json(
+            { error: `${models[model]?.name ?? model} is not enabled on this deployment` },
+            { status: 403 }
+        );
+    }
 
     const modelToUse = determineModel(model, messages);
     const useAgents = model === "agents";
@@ -145,7 +157,7 @@ export async function POST(req: Request) {
         : []; // This can be a tool as well
 
     const system = useAgents
-        ? `${agentsPrompt}${toolsPrompt}${relevantMemories.join("\n")}`
+        ? `${agentsPrompt}${enableArtifacts ? artifactPrompt : ""}${toolsPrompt}${relevantMemories.join("\n")}`
         : buildPrompt(
               enableArtifacts && !unsupportedArtifactUseModels.includes(model),
               enableInstructions,
@@ -199,7 +211,13 @@ The user connected the GitHub repository ${repo.owner}/${repo.repo}, but it coul
         // Reasoning models only support the default sampling settings
         temperature: isThinkingModel ? undefined : finalTemperature,
         topP: isThinkingModel ? undefined : finalTopP,
-        maxOutputTokens: finalMaxTokens,
+        maxOutputTokens: Math.min(
+            finalMaxTokens!,
+            models[modelToUse].maxTokens ?? finalMaxTokens!
+        ),
+        // The custom "reasoning" model has its own thinking budget
+        reasoning:
+            isThinkingModel && modelToUse !== "reasoning" ? reasoningLevel : undefined,
         instructions: {
             role: "system",
             content: system + repoPrompt,
