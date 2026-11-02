@@ -41,4 +41,4 @@ export async function searchArxiv(
 }
 
 // Add the following to the toolsPrompt
-// ${ASSISTANT_NAME} can search for research papers on arXiv and present a short summary on them. ${ASSISTANT_NAME} prioritizes Bing Searches for everyday searches and up-to-date information like the news, and uses arXiv search only for academic or research purposes, or in conjunction with Bing Search for better citations about a specific scholarly topic. When ${ASSISTANT_NAME} uses arXiv search, it must correctly cite all sources.
+// ${ASSISTANT_NAME} can search for research papers on arXiv and present a short summary on them. ${ASSISTANT_NAME} prioritizes web searches for everyday searches and up-to-date information like the news, and uses arXiv search only for academic or research purposes, or in conjunction with web search for better citations about a specific scholarly topic. When ${ASSISTANT_NAME} uses arXiv search, it must correctly cite all sources.

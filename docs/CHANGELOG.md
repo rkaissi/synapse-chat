@@ -2,6 +2,12 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Web search on OpenAI
+
+- **Web search works again.** `bing_web_search` failed on every call (Microsoft retired the Bing Search API). The new `web_search` tool makes a small GPT-6 Luna call with OpenAI's hosted web search (low reasoning effort, existing OpenAI key) and returns the summary and source pages, so it works with every chat model. Sources use Bing's old `webPages` shape, so the Sources card is unchanged. OpenAI returns no image results or related searches, so those cards only appear in older chats, which still render (the UI matches both tool names). It costs about $10 per 1,000 searches plus tokens; switching to Tavily is on the roadmap.
+- `BING_API_KEY` is removed from `.env.example`, and the system prompt no longer mentions Bing or search images.
+- README: dropped the link to the old Render deployment.
+
 ## 2026-11-02 — Vercel deployment prep
 
 - **Published artifact links no longer need `NEXT_PUBLIC_URL`.** The link is built from the address the request came to, so it's right on localhost, Vercel preview deployments, production and custom domains. The variable was the only use and would have pointed live links at `localhost` when set to the local value. It's removed from `.env.example`.

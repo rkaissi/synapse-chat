@@ -41,10 +41,8 @@ A full pass over the interface. Known issues and ideas collected so far:
 
 ### Web search
 
-- [ ] Replace `bing_web_search` (the Bing Search API was retired; calls return 401). Options:
-  - OpenAI's built-in web search tool, called from a tool so it works for any chat model (uses the existing OpenAI key)
-  - Anthropic's web search tool (Anthropic models only)
-  - A search API such as Brave, Tavily or Exa (needs a new key); keeps the existing sources/images/related-searches cards
+- [x] Replace `bing_web_search` (the Bing Search API was retired; calls return 401) with `web_search`, which runs OpenAI's hosted web search on GPT-6 Luna
+- [ ] Switch `web_search` to [Tavily](https://tavily.com) to save on costs. OpenAI charges about $10 per 1,000 searches plus the search content as input tokens; Tavily's free plan has 1,000 searches a month (no card), then about $0.008 each. It returns a result list with snippets and images, so the Sources and image gallery cards come back fully (needs a `TAVILY_API_KEY`). Self-hosted SearXNG is the no-cap alternative, but it needs a server outside Vercel and upstream engines often block it.
 - [ ] Turn on search mode like ChatGPT Search
 
 ### GitHub integration follow-ups
