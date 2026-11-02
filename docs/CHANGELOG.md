@@ -2,6 +2,12 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Hobby-compatible requests and 2.5-minute steps
+
+- Fixed the PR preview's `invalid_max_duration` deployment failure: the current Vercel Hobby project permits at most 300 seconds, so both chat/agents routes now request **300 seconds** (five minutes), rather than 600. No hosting plan change is needed.
+- Reduced the shared network budget to **240 seconds** from request start, retaining a minute for the outer reply, and set each agent step to **150 seconds** (2.5 minutes), including retries. The shared deadline still takes precedence; recovery only runs while network time remains.
+- Updated both instruction files, the run-limit guide and the regression assertions to match the deployable limits.
+
 ## 2026-11-02 — Five-minute individual agent steps
 
 - Raised the per-step timeout from 120 to **300 seconds** (five minutes), including retries. The request limit remains 600 seconds and the shared network budget remains 540 seconds; the overall deadline takes precedence if a step starts with less than five minutes remaining. Recovery still runs for a failed worker when time remains, but a slow step leaves less time for reviews and replanning.

@@ -2,13 +2,13 @@
 
 ## Time budgets
 
-- `/api/chat` and `/api/agents` request a **600-second** (10-minute) function duration.
-- In chat, the network has **540 seconds from the beginning of the request**, not a fresh 540 seconds for each tool call. Setup and the outer model's initial planning consume part of that budget. The remaining minute is reserved for the outer model to answer with the completed work and explain unfinished work; it is not a guarantee that the final generation will finish in time.
-- An individual agent step has **300 seconds** (five minutes), including SDK retries and the structured-output retry, or the remaining shared network time if that is shorter. If a worker reaches its own step timeout while the network still has time, its model call is cancelled and the failed step is handed off for recovery. The overall deadline still stops the entire network; five minutes per step does not guarantee every step a full five minutes, and a slow step leaves less time for review/replanning.
+- `/api/chat` and `/api/agents` request a **300-second** (five-minute) function duration.
+- In chat, the network has **240 seconds from the beginning of the request**, not a fresh 240 seconds for each tool call. Setup and the outer model's initial planning consume part of that budget. The remaining minute is reserved for the outer model to answer with the completed work and explain unfinished work; it is not a guarantee that the final generation will finish in time.
+- An individual agent step has **150 seconds** (2.5 minutes), including SDK retries and the structured-output retry, or the remaining shared network time if that is shorter. If a worker reaches its own step timeout while the network still has time, its model call is cancelled and the failed step is handed off for recovery. The overall deadline still stops the entire network; 2.5 minutes per step does not guarantee every step a full 2.5 minutes, and a slow step leaves less time for review/replanning.
 - `lib/agents/limits.ts` holds the network/step budgets. Route `maxDuration` exports are literal values because Next needs to analyze them statically. Keep the network deadline below the route duration.
 - Tool progress is emitted at least every **10 seconds** during a silent model call. Heartbeats do **not** bypass a host's hard duration limit.
 
-The route's duration is subject to the deployment's actual function/plan limits and configuration. On Vercel, Pro/Enterprise with Fluid Compute support a 600-second request. Hobby is capped at 300 seconds with Fluid Compute (lower without it), so this code cannot enable 10-minute requests there. See [Vercel's duration limits](https://vercel.com/docs/functions/configuring-functions/duration). Local Next development does not enforce `maxDuration` like a serverless host, so the network also enforces its own deadline. This is still request-bound execution: a killed server process or lost response cannot perform recovery. Workflows that must outlive a request need durable background jobs, persisted checkpoints and a reconnect/resume endpoint.
+The route's duration is subject to the deployment's actual function/plan limits and configuration. This configuration matches the current Vercel Hobby project's confirmed 300-second limit. The earlier 600-second configuration was rejected at deployment with `invalid_max_duration`; the request and network budgets are now reduced together without changing the hosting plan. See [Vercel's duration limits](https://vercel.com/docs/functions/configuring-functions/duration). Local Next development does not enforce `maxDuration` like a serverless host, so the network also enforces its own deadline. This is still request-bound execution: a killed server process or lost response cannot perform recovery. Workflows that must outlive a request need durable background jobs, persisted checkpoints and a reconnect/resume endpoint.
 
 ## Token budgets
 
@@ -38,7 +38,7 @@ A failed Project Manager is terminal (there is no alternate lead to replan its f
 ## Diagnosing an interrupted run
 
 - **`finish reason: length`**: the combined visible output and hidden reasoning exhausted the token budget. The error reports the budget. Split the task if the capped retry also fails.
-- **`<agent> timed out after 300 seconds`**: a single step used its time budget. Look for a Supervisor review and a PM recovery plan in Activity.
+- **`<agent> timed out after 150 seconds`**: a single step used its time budget. Look for a Supervisor review and a PM recovery plan in Activity.
 - **`Agent run reached its time budget`**: the request's shared network deadline was reached. Completed deliverables are handed back to the outer model; unfinished tasks are not reported as successful.
 - **Provider/API error**: the failed step displays the provider error; a worker failure can recover, but a request cancellation cannot.
 - **Interrupted with no final result**: the client stopped receiving a still-running snapshot. This alone does not identify the cause: check browser network errors and server/deployment logs for cancellation, disconnects or a hard function timeout. A process killed by the host cannot send a final error event.

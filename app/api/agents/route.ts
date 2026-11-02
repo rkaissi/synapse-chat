@@ -1,7 +1,7 @@
 import { createAgentNetwork } from "@/lib/agents";
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
