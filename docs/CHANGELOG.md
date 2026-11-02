@@ -2,6 +2,13 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Replies render in stream order, and reasoning shows right away
+
+- **Text written after a tool call now appears below its card.** All of a reply's text used to render above every tool card, so when the model called a tool and then wrote its answer, the answer streamed in above the cards, off screen for anyone scrolled to the bottom. Assistant messages now keep their text, reasoning and tool calls as `segments` in the order they streamed (`getMessageSegments` in `lib/utils/ui-messages.ts`), saved on the message; text segments map to `processedContent` pieces split by `SEGMENT_SEPARATOR`. Each tool call shows an inline status chip (spinner, done or failed, with its arguments on hover) where it happened, followed by its card. Chats saved before this keep the old layout.
+- **Reasoning shows a live state instead of nothing.** Timed on GPT-6 Luna (medium): the model starts at ~0.8 s, reasoning starts at ~2.2 s and the first summary text arrives at ~3.0 s; until that text arrived the UI showed nothing, and the reasoning then sat in a collapsed accordion. Now "Thinking…" appears as soon as a message is sent and between steps (e.g. after a tool call), the reasoning header counts up ("Thinking for 3s…") while the summary streams into a compact scrolling panel, and it collapses to "Thought for Ns" (expandable) when done. Durations are measured on the client and saved with the segment.
+- **Reasoning is no longer smoothed word by word.** `smoothStream` re-chunked reasoning deltas at 10 ms per word, which slowed the summary and held back the answer that follows by up to ~0.5 s. Reasoning deltas now bypass it (wrapped as raw parts so ordering is kept); text is still smoothed.
+- Tool cards are rendered by one `ToolCard` component per invocation, so several calls to the same tool each get their card (the old layout only showed the first).
+
 ## 2026-11-02 — Faster markdown and code while streaming and in long chats
 
 - **Markdown is converted and rendered block by block.** `markdownToHtml` splits the reply into top-level blocks (never inside code fences or `$$` math, and never between list items), converts each block once with a single shared Showdown converter (it used to build a new one on every call), and caches the result. `CustomMarkdown` only replaces the blocks that changed, so a streaming reply rebuilds just the block being written instead of the whole message, and text selections above it survive. Documents with reference-style links or raw HTML blocks are still converted whole.

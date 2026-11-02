@@ -3,6 +3,7 @@ import {
     Attachment,
     ChatUIMessage,
     CombinedMessage,
+    MessageSegment,
     ToolInvocation
 } from "@/lib/types";
 
@@ -40,6 +41,57 @@ export const getToolInvocations = (message: UIMessage): ToolInvocation[] =>
                   ? { error: part.errorText }
                   : undefined
     }));
+
+/**
+ * The reply's text, reasoning and tool calls in the order they streamed, so
+ * text written after a tool call renders below its card. Consecutive text or
+ * reasoning parts are merged (providers split reasoning summaries into one
+ * part per paragraph), and blank text between tool calls is dropped.
+ * `texts` holds the markdown of each text segment, in order.
+ */
+export const getMessageSegments = (message: UIMessage) => {
+    const segments: MessageSegment[] = [];
+    const texts: string[] = [];
+
+    for (const part of message.parts) {
+        const last = segments.at(-1);
+        if (part.type === "text") {
+            if (last?.type === "text") {
+                texts[texts.length - 1] += part.text;
+            } else {
+                segments.push({ type: "text" });
+                texts.push(part.text);
+            }
+        } else if (part.type === "reasoning") {
+            const done = part.state !== "streaming";
+            if (last?.type === "reasoning") {
+                last.text = [last.text, part.text].filter(Boolean).join("\n\n");
+                last.done = last.done && done;
+            } else {
+                segments.push({ type: "reasoning", text: part.text, done });
+            }
+        } else if (isToolUIPart(part)) {
+            segments.push({ type: "tool", toolCallId: part.toolCallId });
+        }
+    }
+
+    // Drop blank text segments (e.g. a newline between two tool calls)
+    let textIndex = 0;
+    const kept: MessageSegment[] = [];
+    const keptTexts: string[] = [];
+    for (const segment of segments) {
+        if (segment.type !== "text") {
+            kept.push(segment);
+            continue;
+        }
+        const text = texts[textIndex++];
+        if (text.trim() === "") continue;
+        kept.push(segment);
+        keptTexts.push(text);
+    }
+
+    return { segments: kept, texts: keptTexts };
+};
 
 export const getAttachments = (message: UIMessage): Attachment[] =>
     message.parts

@@ -14,6 +14,9 @@ import { highlightCodeBlocks } from "@/lib/showdown-extensions/showdown-code";
 // everything above the block that is still being written
 export const BLOCK_SEPARATOR = "<!--block-->";
 
+// Separates the HTML of a message's text segments (see MessageSegment)
+export const SEGMENT_SEPARATOR = "<!--segment-->";
+
 // Unfenced HTML documents and <style> blocks would be rendered into the app
 // itself and restyle it (e.g. an agent returning a whole page as text). Show
 // them as code instead; live previews belong in the sandboxed artifact iframe.
