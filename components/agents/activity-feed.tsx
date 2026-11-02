@@ -311,8 +311,10 @@ const StepCard = ({
 
                 {running ? (
                     <Working step={step} />
+                ) : step.error ? (
+                    <p className="text-sm text-red-600">{step.error}</p>
                 ) : interrupted ? (
-                    <p className="text-sm italic text-slate-400">The run ended before this step finished.</p>
+                    <p className="text-sm italic text-slate-400">This step was interrupted before returning a result (for example, by cancellation, a lost connection, or a server timeout).</p>
                 ) : step.kind === "plan" ? (
                     <PlanContent content={step.content} />
                 ) : step.kind === "review" ? (

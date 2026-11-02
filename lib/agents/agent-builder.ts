@@ -22,7 +22,12 @@ import {
     AgentStepKind
 } from "./events";
 
+import { AGENT_RUN_TIMEOUT_MS, AGENT_STEP_TIMEOUT_MS } from "./limits";
+
 const MAX_ATTEMPTS = 2;
+
+const errorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : String(error);
 
 // Define the Agent interface
 interface Agent {
@@ -46,6 +51,8 @@ interface Agent {
 interface ExecuteOptions {
     onEvent?: AgentEventHandler;
     abortSignal?: AbortSignal;
+    runTimeoutMs?: number;
+    stepTimeoutMs?: number;
 }
 
 interface Message {
@@ -118,7 +125,7 @@ class ContextManager {
         if (!task) return "";
 
         const tag = index !== undefined ? `task_${index}` : "task";
-        return `<${tag}>\nAgent: ${task.agent}\nInstructions: ${task.instructions}\n<${tag}>`;
+        return `<${tag}>\nAgent: ${task.agent}\nInstructions: ${task.instructions}\n</${tag}>`;
     }
 
     taskListToString(taskList: Task[]) {
@@ -218,6 +225,7 @@ ${this._prompt}
 </project_description>
 
 ${revisionReportPrompt}
+${this._revisionCount > 0 ? this.getProjectContext() : ""}
 
 Review the list of available agents and their roles:
 
@@ -273,16 +281,30 @@ export class AgentNetwork {
     async executePrompt(
         prompt: string,
         additionalContext: string = "",
-        initialTaskList?: any[],
-        { onEvent, abortSignal }: ExecuteOptions = {}
-    ): Promise<any> {
-        const fullPrompt = `\n${prompt}\n\n## Additional Context:\n${additionalContext}`;
-        const contextManager = new ContextManager(fullPrompt);
-
+        initialTaskList?: Task[],
+        {
+            onEvent,
+            abortSignal,
+            runTimeoutMs = AGENT_RUN_TIMEOUT_MS,
+            stepTimeoutMs = AGENT_STEP_TIMEOUT_MS
+        }: ExecuteOptions = {}
+    ): Promise<Message[]> {
+        const contextManager = new ContextManager(
+            `\n${prompt}\n\n## Additional Context:\n${additionalContext}`
+        );
         const emit = (event: AgentEventInput) =>
             onEvent?.({ ...event, at: Date.now() } as AgentEvent);
+        const runController = new AbortController();
+        const runTimer = setTimeout(() => runController.abort(new Error(
+            "Agent run reached its time budget. Completed results are preserved; remaining work is incomplete."
+        )), runTimeoutMs);
+        const runSignal = abortSignal
+            ? AbortSignal.any([abortSignal, runController.signal])
+            : runController.signal;
         let stepCount = 0;
-        // Runs one agent call, wrapped in step-start/step-finish events
+
+        // Bound the whole step, including SDK retries. The race also releases
+        // the network if a provider fails to settle after cancellation.
         const runStep = async (
             agent: Agent,
             kind: AgentStepKind,
@@ -290,155 +312,129 @@ export class AgentNetwork {
             context: string | undefined,
             taskIndex?: number
         ) => {
+            runSignal.throwIfAborted();
             const id = `step-${++stepCount}`;
-            emit({
-                type: "step-start",
-                id,
-                agent: agent.name,
-                kind,
-                revision: contextManager.revisionCount,
-                taskIndex,
-                instructions: kind === "task" ? instructions : undefined
-            });
-            const result = await agent.execute(
-                instructions,
-                context,
-                abortSignal
-            );
-            emit({ type: "step-finish", id, content: result });
-            return result;
+            emit({ type: "step-start", id, agent: agent.name, kind,
+                revision: contextManager.revisionCount, taskIndex,
+                instructions: kind === "task" ? instructions : undefined });
+            const stepController = new AbortController();
+            const timer = setTimeout(() => stepController.abort(new Error(
+                `${agent.name} timed out after ${Math.round(stepTimeoutMs / 1000)} seconds`
+            )), stepTimeoutMs);
+            const signal = AbortSignal.any([runSignal, stepController.signal]);
+            let onAbort: (() => void) | undefined;
+            try {
+                const cancelled = new Promise<never>((_, reject) => {
+                    onAbort = () => reject(signal.reason);
+                    signal.addEventListener("abort", onAbort, { once: true });
+                    if (signal.aborted) onAbort();
+                });
+                const result = await Promise.race([
+                    Promise.resolve().then(() => {
+                        signal.throwIfAborted();
+                        return agent.execute(instructions, context, signal);
+                    }),
+                    cancelled
+                ]);
+                signal.throwIfAborted();
+                emit({ type: "step-finish", id, content: result });
+                return result;
+            } catch (error) {
+                emit({ type: "step-error", id, message: errorMessage(error) });
+                throw error;
+            } finally {
+                clearTimeout(timer);
+                if (onAbort) signal.removeEventListener("abort", onAbort);
+            }
         };
 
         emit({ type: "run-start", prompt, agents: this.getProfiles() });
-
-        while (contextManager.revisionCount < this.maxRevisions) {
-            console.log("REVISION COUNT: ", contextManager.revisionCount);
-
-            // Step 1: Project Manager creates or updates task list
-            if (contextManager.revisionCount === 0 && initialTaskList) {
-                contextManager.taskList = initialTaskList;
-            } else {
-                const pmPrompt = contextManager.createProjectManagerPrompt(
-                    Object.values(this.agents)
-                );
-                const pmResult = await runStep(
-                    this.projectManager,
-                    "plan",
-                    pmPrompt,
-                    undefined
-                );
-
-                contextManager.taskList = pmResult.taskList;
-
-                console.log("### PM BEGIN ###");
-                console.log(pmPrompt);
-                console.log(JSON.stringify(pmResult));
-                console.log("### PM END ###");
-
-                contextManager.addMessage({
-                    agent: this.projectManager.name,
-                    content: { taskList: pmResult.taskList },
-                    type: "task"
-                });
-            }
-
-            emit({
-                type: "plan",
-                revision: contextManager.revisionCount,
-                // Copy: completeTask() removes tasks from the live list
-                taskList: [...contextManager.taskList]
-            });
-
+        try {
             let needsRevision = false;
-            const taskList = [...contextManager.taskList];
-
-            for (const [taskIndex, task] of taskList.entries()) {
-                contextManager.currentTask = task;
-
-                const agent = this.agents[task.agent];
-                if (!agent) {
-                    throw new Error(`Agent ${task.agent} not found`);
+            while (contextManager.revisionCount < this.maxRevisions) {
+                runSignal.throwIfAborted();
+                if (contextManager.revisionCount === 0 && initialTaskList) {
+                    contextManager.taskList = initialTaskList;
+                } else {
+                    const pmResult = await runStep(this.projectManager, "plan",
+                        contextManager.createProjectManagerPrompt(Object.values(this.agents)), undefined);
+                    contextManager.taskList = pmResult.taskList;
+                    contextManager.addMessage({ agent: this.projectManager.name,
+                        content: { taskList: pmResult.taskList }, type: "task" });
                 }
+                // An empty recovery plan must not hide an unresolved failure.
+                if (needsRevision && contextManager.taskList.length === 0) break;
+                emit({ type: "plan", revision: contextManager.revisionCount,
+                    taskList: [...contextManager.taskList] });
+                needsRevision = false;
+                const taskList = [...contextManager.taskList];
 
-                // Get the last 3 messages excluding the first (PM) message
-                const pastMessages = contextManager.globalMessages.slice(
-                    Math.max(contextManager.globalMessages.length - 3, 1)
-                );
-                const taskContext = `${contextManager.getProjectContext()}\n\n<past_messages>\n${JSON.stringify(
-                    pastMessages
-                )}\n<past_messages>`;
-                console.log(
-                    `### AGENT: ${agent.name} ###\n\n# Instructions: ${task.instructions}\n\n# Context: ${taskContext}\n\n`
-                );
-                // Execute the task with the current agent
-                const result = await runStep(
-                    agent,
-                    "task",
-                    task.instructions,
-                    taskContext,
-                    taskIndex
-                );
+                for (const [taskIndex, task] of taskList.entries()) {
+                    contextManager.currentTask = task;
+                    const agent = this.agents[task.agent];
+                    if (!agent) throw new Error(`Agent ${task.agent} not found`);
+                    const pastMessages = contextManager.globalMessages.slice(
+                        Math.max(contextManager.globalMessages.length - 3, 1)
+                    );
+                    const taskContext = `${contextManager.getProjectContext()}\n\n<past_messages>\n${JSON.stringify(pastMessages)}\n</past_messages>`;
+                    let result: any;
+                    let taskError: string | undefined;
+                    try {
+                        result = await runStep(agent, "task", task.instructions, taskContext, taskIndex);
+                    } catch (error) {
+                        // User cancellation and the total deadline are terminal;
+                        // only an individual step failure is sent for recovery.
+                        runSignal.throwIfAborted();
+                        taskError = errorMessage(error);
+                        result = { error: taskError, incomplete: true };
+                    }
+                    contextManager.addMessage({ agent: task.agent, content: result, type: "result" });
 
-                contextManager.addMessage({
-                    agent: task.agent,
-                    content: result,
-                    type: "result"
-                });
+                    let supervisorReview: any;
+                    try {
+                        supervisorReview = await runStep(this.supervisor, "review",
+                            JSON.stringify({ agent: task.agent, task: task.instructions, result,
+                                ...(taskError && { recovery: "This agent failed. Ask the Project Manager to split the task into smaller deliverables or reassign it. Preserve completed work; never approve a missing result." }) }),
+                            contextManager.getProjectContext(), taskIndex);
+                    } catch (error) {
+                        runSignal.throwIfAborted();
+                        supervisorReview = { needsRevision: true,
+                            report: `Supervisor could not review ${task.agent}: ${errorMessage(error)}. Preserve completed work and replan the unfinished task and remaining tasks.` };
+                    }
+                    if (taskError) {
+                        // Never accept a failed worker as a completed task, even
+                        // if the model mistakenly approves the failure report.
+                        supervisorReview = { ...supervisorReview, needsRevision: true,
+                            report: `${task.agent} failed: ${taskError}. Split or reassign this task and keep the remaining tasks. ${supervisorReview.report ?? ""}` };
+                    }
+                    contextManager.lastTaskReview = supervisorReview;
+                    contextManager.addMessage({ agent: this.supervisor.name,
+                        content: supervisorReview, type: "review" });
 
-                const supervisorContext = contextManager.getProjectContext();
-                const supervisorReview = await runStep(
-                    this.supervisor,
-                    "review",
-                    JSON.stringify({
-                        agent: task.agent,
-                        task: task.instructions,
-                        result: result
-                    }),
-                    supervisorContext,
-                    taskIndex
-                );
-
-                contextManager.lastTaskReview = supervisorReview;
-
-                console.log(
-                    `### Supervisor Context ###\n\n${supervisorContext}\n\n### Supervisor Review:  ###\n\n${JSON.stringify(
-                        supervisorReview
-                    )}`
-                );
-
-                contextManager.addMessage({
-                    agent: this.supervisor.name,
-                    content: supervisorReview,
-                    type: "review"
-                });
-
-                contextManager.completeTask();
-
-                if (supervisorReview.needsRevision) {
-                    needsRevision = true;
-                    contextManager.lastRevisionReport = supervisorReview.report;
-                    break;
+                    if (supervisorReview.needsRevision) {
+                        needsRevision = true;
+                        contextManager.lastRevisionReport = supervisorReview.report || supervisorReview.summary || "The task needs revision.";
+                        break;
+                    }
+                    contextManager.completeTask();
+                }
+                if (!needsRevision) break;
+                contextManager.incrementRevisionCount();
+                if (contextManager.revisionCount < this.maxRevisions) {
+                    emit({ type: "revision", revision: contextManager.revisionCount,
+                        report: contextManager.lastRevisionReport });
                 }
             }
-
-            if (!needsRevision) {
-                break;
-            }
-
-            contextManager.incrementRevisionCount();
-            if (contextManager.revisionCount < this.maxRevisions) {
-                emit({
-                    type: "revision",
-                    revision: contextManager.revisionCount,
-                    report: contextManager.lastRevisionReport
-                });
-            }
+            emit({ type: "run-finish", incomplete: needsRevision,
+                report: needsRevision ? contextManager.lastRevisionReport : undefined });
+            return contextManager.globalMessages;
+        } catch (error) {
+            const message = runSignal.aborted ? errorMessage(runSignal.reason) : errorMessage(error);
+            emit({ type: "error", message });
+            throw new Error(message, { cause: error });
+        } finally {
+            clearTimeout(runTimer);
         }
-
-        console.log("### GLOBAL CONTEXT ###");
-        console.log(JSON.stringify(contextManager.globalMessages));
-        emit({ type: "run-finish" });
-        return contextManager.globalMessages;
     }
 }
 
@@ -487,15 +483,16 @@ export class AgentBuilder {
                 // A response can be cut off (the token budget includes hidden
                 // reasoning) or unparseable; retry once before failing the
                 // whole network, with a bigger budget if it ran out
-                let maxOutputTokens = config.maxTokens;
+                let maxOutputTokens = Math.min(config.maxTokens, config.model.maxTokens ?? config.maxTokens);
                 for (let attempt = 1; ; attempt++) {
+                    abortSignal?.throwIfAborted();
                     let finishReason: string | undefined;
                     try {
                         const result = await generateText({
                             model: getModel(config.model),
                             instructions: config.role,
                             temperature: isReasoning ? undefined : config.temperature,
-                            reasoning: isReasoning ? config.reasoning : undefined,
+                            reasoning: isReasoning ? (config.reasoning ?? "high") : undefined,
                             maxOutputTokens,
                             prompt: fullPrompt,
                             tools: webSearch
@@ -508,6 +505,7 @@ export class AgentBuilder {
                         finishReason = result.finishReason;
                         return result.output;
                     } catch (error) {
+                        abortSignal?.throwIfAborted();
                         const noOutput =
                             NoObjectGeneratedError.isInstance(error) ||
                             NoOutputGeneratedError.isInstance(error);
@@ -517,7 +515,7 @@ export class AgentBuilder {
                         if (!noOutput || attempt >= MAX_ATTEMPTS) {
                             throw new Error(
                                 noOutput
-                                    ? `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"})`
+                                    ? `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"}; output budget: ${maxOutputTokens} tokens including reasoning)`
                                     : `${config.name} failed: ${error instanceof Error ? error.message : String(error)}`,
                                 { cause: error }
                             );
@@ -529,7 +527,7 @@ export class AgentBuilder {
                             );
                         }
                         console.warn(
-                            `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"}), retrying with ${maxOutputTokens} tokens`
+                            `${config.name} returned no usable output (finish reason: ${finishReason ?? "unknown"}; output budget: ${maxOutputTokens} tokens including reasoning), retrying with ${maxOutputTokens} tokens`
                         );
                     }
                 }

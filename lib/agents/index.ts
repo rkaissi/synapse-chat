@@ -48,6 +48,7 @@ You are a project manager. Your responsibilities include creating or updating a 
 
 5. **Efficiency and Accuracy**:
    - Avoid over-delegation or creating unnecessary tasks and ensure all agents work within the project scope.
+   - Each agent has a bounded response time. Keep tasks small enough to finish in one response. If a task failed or timed out, split it into smaller deliverables or reassign it; do not repeat the same failed instructions. Preserve completed work and include remaining unfinished tasks in the recovery plan.
    - Use a step-by-step approach to ensure all aspects of the task are covered.
 
 Remember to think carefully about each step of the process and provide a well-reasoned task list and agent assignments that efficiently address the project requirements while staying within scope.
@@ -82,7 +83,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         model: models.gpt61terra,
         temperature: 0.5,
         // Whole programs (e.g. a game) need a large budget
-        maxTokens: 64000,
+        maxTokens: 128000,
         reasoning: "medium",
         schema: programmerSchema
     });
@@ -93,7 +94,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are a senior software engineer, QA expert, and debugger specialist. Check for any bugs or missing edge cases, and if there are bugs, report them to be fixed. Testing cannot be performed in any way other than checking the code, so you do not need to mention checking the code. Your job is to find bugs and edge cases, so do try to delegate that to anyone else.",
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: debuggerSchema
     });
 
@@ -103,7 +104,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an expert writer. Think step by step.",
         model: models.gpt61terra,
         temperature: 0.5,
-        maxTokens: 32000,
+        maxTokens: 64000,
         reasoning: "medium",
         schema: standardAgentSchema
     });
@@ -114,7 +115,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an expert editor. You will check the content you receive for spelling, clearness, and grammar errors. Improve the content, but do not add to it. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: standardAgentSchema
     });
 
@@ -124,7 +125,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an expert summarizer. Summarize the provided content and make sure to keep the most important information. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: standardAgentSchema
     });
 
@@ -143,7 +144,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
             `,
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: standardAgentSchema
     });
 
@@ -153,7 +154,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an expert researcher who can search the web for current information. Search for relevant, up-to-date information about the topic and respond with your findings, citing the source URLs. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         webSearch: true,
         schema: researcherSchema
     });
@@ -164,7 +165,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are a fact checker, reviewer, and verifier who can search the web to check claims. You must make sure all the information presented is rooted in facts and truth unless mentioned otherwise (e.g. opinions or theories). Search the web to check facts that may be outdated or uncertain. You point out anything that might've been missed. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.3,
-        maxTokens: 16000,
+        maxTokens: 32000,
         webSearch: true,
         schema: verifierSchema
     });
@@ -175,7 +176,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an staunch debater and a logical contrarian. You present varying opinions and counterarguments. You call out any biases, logical fallacies, or potential misinformation. You point out anything that might've been missed. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.7,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: standardAgentSchema
     });
 
@@ -185,7 +186,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are a curious inquisitor and explorer. You try to dive deeper into topics by providing some questions or topics that can lead to deeper and more nuanced information related to the topic. You make connections with other fields and topics. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.6,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: inquisitorSchema
     });
 
@@ -195,7 +196,7 @@ You are a supervisor. Your role is to review the work of other agents, provide g
         role: "You are an expert logician. You solve logic puzzles and riddles. Think of all the possible nuances of the problem. The answer might not be the obvious one. Think of alternate solutions and see if they would also work. Think step by step.",
         model: models.gpt6luna,
         temperature: 0.5,
-        maxTokens: 16000,
+        maxTokens: 32000,
         schema: standardAgentSchema
     });
 

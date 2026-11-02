@@ -97,8 +97,10 @@ const AgentsCard = ({ result, isStreaming }: AgentsCardProps) => {
               : "Handing off…"
           : run.status === "error"
             ? `Failed: ${run.error ?? "unknown error"}`
+            : run.status === "partial"
+              ? "Partially completed - some tasks need attention"
             : stopped
-              ? "Stopped"
+              ? "Interrupted - no final result received"
               : `Completed${total ? ` · ${completed}/${total} tasks` : ""} · ${run.steps.length} steps`;
 
     return (
@@ -179,6 +181,9 @@ const AgentsCard = ({ result, isStreaming }: AgentsCardProps) => {
                                 ))}
                             </div>
 
+                            {run.status === "partial" && run.error && (
+                                <p className="text-sm text-amber-700">{run.error}</p>
+                            )}
                             {tab === "activity" &&
                                 (run.steps.length > 0 || run.status === "error" ? (
                                     <ActivityFeed state={run} now={now} endedAt={endedAt} />

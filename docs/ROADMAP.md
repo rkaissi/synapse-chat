@@ -28,7 +28,9 @@ A full pass over the interface. Known issues and ideas collected so far:
 - [x] Stream agent progress into the chat, with a network graph, plan, team, activity and trace view (agent team card)
 - [x] Per-role models: Programmer and Writer on GPT-6.1 Terra, everything else on GPT-6 Luna
 - [ ] Consider GPT-6.1 Sol for the Mathematician and Logician (reasoning-heavy roles)
-- [ ] Trim the verbose agent prompt logging in the server console
+- [x] Trim the verbose agent prompt logging in the server console
+- [x] Bound agent steps and runs, recover failed workers via Supervisor/PM, and preserve partial deliverables
+- [ ] Durable background agent jobs with persisted checkpoints and reconnect/resume for runs longer than a request
 - [ ] Stream each agent's text as it is generated (today a step appears when the agent finishes)
 - [ ] Run independent tasks in parallel instead of strictly one after another
 - [ ] Choose which agents may take part in a run
