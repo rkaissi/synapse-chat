@@ -349,7 +349,7 @@ test("an expired request budget does not start any new agent calls", async () =>
 });
 
 
-test("both routes allow ten minutes and the network reserves a minute for the final reply", () => {
+test("routes allow ten minutes, steps allow five, and the network reserves a minute for the final reply", () => {
     const h = harness();
     for (const route of ["app/api/chat/route.ts", "app/api/agents/route.ts"]) {
         const source = readFileSync(resolve(root, route), "utf8");
@@ -357,5 +357,6 @@ test("both routes allow ten minutes and the network reserves a minute for the fi
         assert.equal(duration, 600);
         assert.equal(duration * 1000 - h.AGENT_RUN_TIMEOUT_MS, 60000);
     }
-    assert.equal(h.AGENT_STEP_TIMEOUT_MS, 120000);
+    assert.equal(h.AGENT_STEP_TIMEOUT_MS, 300000);
+    assert.ok(h.AGENT_STEP_TIMEOUT_MS < h.AGENT_RUN_TIMEOUT_MS);
 });

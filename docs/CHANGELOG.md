@@ -2,6 +2,11 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Five-minute individual agent steps
+
+- Raised the per-step timeout from 120 to **300 seconds** (five minutes), including retries. The request limit remains 600 seconds and the shared network budget remains 540 seconds; the overall deadline takes precedence if a step starts with less than five minutes remaining. Recovery still runs for a failed worker when time remains, but a slow step leaves less time for reviews and replanning.
+- Updated both instruction files, the agent-run guide and the regression check for the five-minute step limit and unchanged final-reply reserve.
+
 ## 2026-11-02 — Ten-minute agent request limit
 
 - Raised both chat/agents route duration limits from 300 to **600 seconds**. The shared network budget increases from 240 to **540 seconds** from request start, still reserving a minute for the final chat reply. Per-step timeouts remain 120 seconds, so a stuck worker can still trigger recovery rather than consuming the entire request.

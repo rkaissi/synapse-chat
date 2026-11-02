@@ -4,7 +4,7 @@
 
 - `/api/chat` and `/api/agents` request a **600-second** (10-minute) function duration.
 - In chat, the network has **540 seconds from the beginning of the request**, not a fresh 540 seconds for each tool call. Setup and the outer model's initial planning consume part of that budget. The remaining minute is reserved for the outer model to answer with the completed work and explain unfinished work; it is not a guarantee that the final generation will finish in time.
-- An individual agent step has **120 seconds**, including SDK retries and the structured-output retry. If it times out, its model call is cancelled and the failed step is handed off for recovery.
+- An individual agent step has **300 seconds** (five minutes), including SDK retries and the structured-output retry, or the remaining shared network time if that is shorter. If a worker reaches its own step timeout while the network still has time, its model call is cancelled and the failed step is handed off for recovery. The overall deadline still stops the entire network; five minutes per step does not guarantee every step a full five minutes, and a slow step leaves less time for review/replanning.
 - `lib/agents/limits.ts` holds the network/step budgets. Route `maxDuration` exports are literal values because Next needs to analyze them statically. Keep the network deadline below the route duration.
 - Tool progress is emitted at least every **10 seconds** during a silent model call. Heartbeats do **not** bypass a host's hard duration limit.
 
@@ -38,7 +38,7 @@ A failed Project Manager is terminal (there is no alternate lead to replan its f
 ## Diagnosing an interrupted run
 
 - **`finish reason: length`**: the combined visible output and hidden reasoning exhausted the token budget. The error reports the budget. Split the task if the capped retry also fails.
-- **`<agent> timed out after 120 seconds`**: a single step used its time budget. Look for a Supervisor review and a PM recovery plan in Activity.
+- **`<agent> timed out after 300 seconds`**: a single step used its time budget. Look for a Supervisor review and a PM recovery plan in Activity.
 - **`Agent run reached its time budget`**: the request's shared network deadline was reached. Completed deliverables are handed back to the outer model; unfinished tasks are not reported as successful.
 - **Provider/API error**: the failed step displays the provider error; a worker failure can recover, but a request cancellation cannot.
 - **Interrupted with no final result**: the client stopped receiving a still-running snapshot. This alone does not identify the cause: check browser network errors and server/deployment logs for cancellation, disconnects or a hard function timeout. A process killed by the host cannot send a final error event.
