@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BrainIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { CustomMarkdown } from "./markdown";
 import markdownToHtml from "@/lib/utils/markdown-to-html";
 import { cn } from "@/lib/utils";
@@ -31,8 +31,7 @@ const useElapsed = (active: boolean) => {
 };
 
 export const ThinkingIndicator = ({ label = "Thinking" }: { label?: string }) => (
-    <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
-        <BrainIcon className="h-4 w-4 animate-pulse" />
+    <div className="py-1 text-sm text-muted-foreground">
         <span className="agent-shimmer font-medium">{label}…</span>
     </div>
 );
@@ -75,9 +74,6 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
                 )}
                 aria-expanded={expanded}
             >
-                <BrainIcon
-                    className={cn("h-4 w-4", isStreaming && "animate-pulse")}
-                />
                 <span className={cn(isStreaming && "agent-shimmer")}>
                     {label}
                     {isStreaming && "…"}
