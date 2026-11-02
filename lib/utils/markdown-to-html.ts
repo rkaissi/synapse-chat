@@ -9,6 +9,11 @@ import {
 } from "@/lib/showdown-extensions";
 import DOMPurify from "dompurify";
 
+// Separates the HTML of top-level markdown blocks. CustomMarkdown only
+// replaces the blocks that changed, so a streaming reply doesn't rebuild
+// everything above the block that is still being written
+export const BLOCK_SEPARATOR = "<!--block-->";
+
 // Unfenced HTML documents and <style> blocks would be rendered into the app
 // itself and restyle it (e.g. an agent returning a whole page as text). Show
 // them as code instead; live previews belong in the sandboxed artifact iframe.
@@ -30,8 +35,80 @@ const fenceRawHtml = (markdown: string) =>
         )
         .join("");
 
-const markdownToHtml = (markdown: string) => {
-    const converter = new Converter({
+// Any indentation, so fences inside list items are tracked too
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})/;
+const FENCE_CLOSE = /^\s*(`{3,}|~{3,})\s*$/;
+const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+// Blocks that can depend on markdown elsewhere in the document (reference
+// links) or span blank lines (raw HTML). Such documents are converted whole
+const REFERENCE_DEFINITION = /^ {0,3}\[[^\]^][^\]]*\]:\s*\S/;
+const HTML_LINE = /^ {0,3}<\/?[a-zA-Z][\w-]*(?:[\s>/]|$)/;
+
+/**
+ * Splits markdown at blank lines that end a top-level block: never inside
+ * code fences or $$ math, and not before indented lines or list items (list
+ * items stay together so loose lists aren't split into separate lists).
+ */
+const splitBlocks = (markdown: string): string[] => {
+    const blocks: string[] = [];
+    let current: string[] = [];
+    let fence: string | null = null;
+    let inMath = false;
+    let afterBlank = false;
+
+    for (const line of markdown.split("\n")) {
+        if (fence) {
+            const close = line.match(FENCE_CLOSE);
+            if (
+                close &&
+                close[1][0] === fence[0] &&
+                close[1].length >= fence.length
+            ) {
+                fence = null;
+            }
+            current.push(line);
+            continue;
+        }
+
+        if (line.trim() === "") {
+            afterBlank = current.length > 0;
+            current.push(line);
+            continue;
+        }
+
+        if (REFERENCE_DEFINITION.test(line) || HTML_LINE.test(line)) {
+            return [markdown];
+        }
+
+        if (
+            afterBlank &&
+            !inMath &&
+            !/^\s/.test(line) &&
+            !LIST_ITEM.test(line)
+        ) {
+            blocks.push(current.join("\n"));
+            current = [];
+        }
+        afterBlank = false;
+
+        const open = line.match(FENCE_OPEN);
+        if (open) {
+            fence = open[1];
+        } else if ((line.match(/\$\$/g)?.length ?? 0) % 2 === 1) {
+            inMath = !inMath;
+        }
+        current.push(line);
+    }
+
+    if (current.length > 0) blocks.push(current.join("\n"));
+    return blocks;
+};
+
+let converter: Converter | null = null;
+
+const getConverter = () => {
+    if (converter) return converter;
+    converter = new Converter({
         tables: true,
         ghCodeBlocks: true,
         strikethrough: true,
@@ -58,8 +135,35 @@ const markdownToHtml = (markdown: string) => {
         ]
     });
     converter.setFlavor("github");
-    const html = converter.makeHtml(fenceRawHtml(markdown));
-    return DOMPurify.sanitize(html);
+    return converter;
 };
+
+// Converted blocks, so finished blocks aren't converted again on every
+// streamed update (and re-rendering a chat doesn't redo every message)
+const MAX_CACHED_BLOCKS = 500;
+const blockCache = new Map<string, string>();
+
+const convertBlock = (markdown: string) => {
+    const cached = blockCache.get(markdown);
+    if (cached !== undefined) {
+        // Move to the end so the least recently used block is evicted first
+        blockCache.delete(markdown);
+        blockCache.set(markdown, cached);
+        return cached;
+    }
+
+    const html = DOMPurify.sanitize(getConverter().makeHtml(markdown));
+    blockCache.set(markdown, html);
+    if (blockCache.size > MAX_CACHED_BLOCKS) {
+        blockCache.delete(blockCache.keys().next().value!);
+    }
+    return html;
+};
+
+const markdownToHtml = (markdown: string) =>
+    splitBlocks(fenceRawHtml(markdown))
+        .filter((block) => block.trim() !== "")
+        .map(convertBlock)
+        .join(BLOCK_SEPARATOR);
 
 export default markdownToHtml;

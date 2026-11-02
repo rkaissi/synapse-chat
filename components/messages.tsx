@@ -1,5 +1,5 @@
 import { AUTO_ROUTER_MODELS, CombinedMessage, NewMessage } from "@/lib/types";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
 import {
     Avatar,
     AvatarFallback,
@@ -89,23 +89,45 @@ export const Messages = ({
 }: MessagesProps) => {
     return (
         <>
-            {messages.map((message, index) =>
-                message.role === "user" ? (
-                    <UserMessage key={message.id} message={message} />
-                ) : message.role === "assistant" ? (
-                    <AssistantMessage
+            {messages.map((message, index) => {
+                const isLatest = index === messages.length - 1;
+                const content =
+                    message.role === "user" ? (
+                        <MemoizedUserMessage message={message} />
+                    ) : message.role === "assistant" ? (
+                        <MemoizedAssistantMessage
+                            message={message}
+                            onArtifactClick={onArtifactClick}
+                            onRegenerate={isLatest ? onRegenerate : undefined}
+                            isLatestResponse={isLatest}
+                            isStreaming={isStreaming && isLatest}
+                            addMessage={addMessage}
+                        />
+                    ) : null;
+                if (!content) return null;
+                return (
+                    <div
                         key={message.id}
-                        message={message}
-                        onArtifactClick={onArtifactClick}
-                        onRegenerate={onRegenerate}
-                        isLatestResponse={index === messages.length - 1}
-                        isStreaming={isStreaming && index === messages.length - 1}
-                        addMessage={addMessage}
-                    />
-                ) : null
-            )}
+                        // Off-screen messages skip layout and paint, which keeps
+                        // long chats responsive. The latest exchange always renders
+                        style={
+                            index < messages.length - 2
+                                ? offscreenMessageStyle
+                                : undefined
+                        }
+                    >
+                        {content}
+                    </div>
+                );
+            })}
         </>
     );
+};
+
+const offscreenMessageStyle: CSSProperties = {
+    contentVisibility: "auto",
+    // Remembers each message's rendered height once it has been on screen
+    containIntrinsicSize: "auto 400px"
 };
 
 interface UserMessageProps {
@@ -670,3 +692,8 @@ const CopyButton: React.FC<CopyButtonProps> = ({ content }) => {
         </Button>
     );
 };
+
+// Older messages keep their props while the latest one streams, so they
+// skip re-rendering on every streamed update and keystroke
+const MemoizedUserMessage = memo(UserMessage);
+const MemoizedAssistantMessage = memo(AssistantMessage);

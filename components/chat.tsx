@@ -48,6 +48,18 @@ import {
 
 const transport = new DefaultChatTransport<ChatUIMessage>({ api: "/api/chat" });
 
+// Runs the callback in the next frame. Browsers pause animation frames in
+// background tabs, so there it falls back to a timeout: a reply that finishes
+// while the user is in another tab is still processed and saved
+const scheduleFrame = (callback: () => void) => {
+    if (document.hidden) {
+        const timeout = setTimeout(callback, 0);
+        return () => clearTimeout(timeout);
+    }
+    const frame = requestAnimationFrame(callback);
+    return () => cancelAnimationFrame(frame);
+};
+
 const DefaultPrompts = dynamic(() => import("./defaultprompts"), {
     loading: () => <DefaultPromptsSkeleton />,
     ssr: false
@@ -192,11 +204,24 @@ export function Chat({
     // The user is identified by a cookie (proxy.ts), not sent in the body
     const requestOptions = { body: { settings: state, repo } };
 
-    const addMessage = (message: NewMessage) => {
-        shouldSaveRef.current = true;
-        followOutputRef.current = true;
-        sendMessage({ text: message.content }, requestOptions);
-    };
+    // Read by the callbacks below, which stay stable so the memoized
+    // messages don't re-render whenever the chat does
+    const latestRef = useRef({ requestOptions, artifacts });
+    useLayoutEffect(() => {
+        latestRef.current = { requestOptions, artifacts };
+    });
+
+    const addMessage = useCallback(
+        (message: NewMessage) => {
+            shouldSaveRef.current = true;
+            followOutputRef.current = true;
+            sendMessage(
+                { text: message.content },
+                latestRef.current.requestOptions
+            );
+        },
+        [sendMessage]
+    );
 
     const handleSubmit = (
         event: React.FormEvent<HTMLFormElement>,
@@ -390,6 +415,43 @@ export function Chat({
 
             let newCombinedMessages = [...combinedMessages];
 
+            // Earlier messages that were never processed: when several
+            // updates land before a frame runs, only the latest is processed
+            // (e.g. the user's message when the reply starts right away)
+            const knownIds = new Set(newCombinedMessages.map((m) => m.id));
+            for (const message of messages.slice(0, -1)) {
+                if (
+                    knownIds.has(message.id) ||
+                    loadedMessageIdsRef.current.has(message.id)
+                ) {
+                    continue;
+                }
+                const content = getMessageText(message);
+                const { cleanedContent, artifacts } =
+                    state.enableArtifacts && content.includes("<assistant")
+                        ? extractArtifacts(content)
+                        : { cleanedContent: content, artifacts: [] };
+                const html = markdownToHtml(cleanedContent);
+                newCombinedMessages.push({
+                    id: message.id,
+                    role: message.role,
+                    originalContent: content,
+                    processedContent: html,
+                    attachments: getAttachments(message),
+                    artifact: artifacts[0],
+                    model: message.metadata?.model ?? state.model,
+                    toolInvocations: getToolInvocations(message),
+                    reasoning: getMessageReasoning(message) || undefined,
+                    states: [
+                        {
+                            content: html,
+                            artifact: artifacts[0],
+                            timestamp: Date.now()
+                        }
+                    ]
+                });
+            }
+
             // Check if we're regenerating a message
             if (regeneratingMessageId && latestMessage.role === "assistant") {
                 // Find the index of the message we're regenerating
@@ -519,15 +581,15 @@ export function Chat({
             // and with a long artifact each pass takes longer than the stream's
             // throttle, so React hits its nested update limit. A frame also
             // merges bursts (only the latest message is processed).
-            const frame = requestAnimationFrame(() => {
+            return scheduleFrame(() => {
                 lastProcessedMessageRef.current = latestMessage;
                 processMessages();
             });
-            return () => cancelAnimationFrame(frame);
         }
     }, [
         messages,
         state.model,
+        state.enableArtifacts,
         processMessage,
         combinedMessages,
         regeneratingMessageId,
@@ -538,25 +600,25 @@ export function Chat({
     // and frames run in order) before the chat is saved
     useEffect(() => {
         if ((status === "ready" || status === "error") && shouldSaveRef.current) {
-            const frame = requestAnimationFrame(() => {
+            return scheduleFrame(() => {
                 if (shouldSaveRef.current) save();
             });
-            return () => cancelAnimationFrame(frame);
         }
     }, [status, save]);
 
     // Modify the reload function to set the regeneratingMessageId
     const handleReload = useCallback(() => {
-        const lastAssistantMessage = combinedMessages.findLast(
+        const lastAssistantMessage = combinedMessagesRef.current.findLast(
             (m) => m.role === "assistant"
         );
         if (lastAssistantMessage) {
             setRegeneratingMessageId(lastAssistantMessage.id);
         }
         reload();
-    }, [combinedMessages, reload]);
+    }, [reload]);
 
-    const openArtifact = (identifier: string) => {
+    const openArtifact = useCallback((identifier: string) => {
+        const { artifacts } = latestRef.current;
         setIsArtifactsOpen(true);
         setCurrentArtifactIndex(
             artifacts.indexOf(
@@ -565,7 +627,7 @@ export function Chat({
                 )[0]
             ) || 0
         );
-    };
+    }, []);
 
     const scrollToBottom = useCallback(() => {
         if (messagesContainerRef.current && messagesEndRef.current) {

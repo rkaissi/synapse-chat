@@ -2,6 +2,13 @@
 
 Notable changes, including bugs found and fixed while testing. Newest first.
 
+## 2026-11-02 — Faster markdown and code while streaming and in long chats
+
+- **Markdown is converted and rendered block by block.** `markdownToHtml` splits the reply into top-level blocks (never inside code fences or `$$` math, and never between list items), converts each block once with a single shared Showdown converter (it used to build a new one on every call), and caches the result. `CustomMarkdown` only replaces the blocks that changed, so a streaming reply rebuilds just the block being written instead of the whole message, and text selections above it survive. Documents with reference-style links or raw HTML blocks are still converted whole.
+- **Code highlighting is cached.** Recent highlight.js results are reused, so finished code blocks aren't highlighted again on every streamed update, and the artifact code view doesn't re-highlight the whole file when the chat re-renders (e.g. on each keystroke). Fixed the language-detection cache, which saved results under the detected language rather than the requested one, so `highlightAuto` (which tries every language) ran on every update for unknown languages.
+- **Older messages no longer re-render on every update.** User and assistant messages are memoized and the chat passes stable callbacks. Messages outside the latest exchange use `content-visibility: auto`, so long chats skip layout and paint for messages off screen.
+- **Fixed the user's message sometimes being lost.** Messages are processed one frame later, and only the latest one; when the reply started before that frame ran (always, in a background tab, where browsers pause animation frames), the user's message was never added to the chat or saved. Earlier unprocessed messages are now added too, and processing falls back to a timeout in background tabs so a reply that finishes there is still saved.
+
 ## 2026-11-02 — Hobby-compatible requests and 2.5-minute steps
 
 - Fixed the PR preview's `invalid_max_duration` deployment failure: the current Vercel Hobby project permits at most 300 seconds, so both chat/agents routes now request **300 seconds** (five minutes), rather than 600. No hosting plan change is needed.
