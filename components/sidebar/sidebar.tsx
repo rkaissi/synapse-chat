@@ -14,15 +14,11 @@ interface Chat {
     lastMessage: string;
 }
 
-interface Props {
-    userId: string;
-}
-
 const CHAT_ITEM_HEIGHT = 76;
 const INITIAL_LOAD_COUNT = 20;
 const SCROLL_THRESHOLD = 100;
 
-export const Sidebar = memo(function Sidebar({ userId }: Props) {
+export const Sidebar = memo(function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const [chats, setChats] = useState<Chat[]>([]);
@@ -54,7 +50,6 @@ export const Sidebar = memo(function Sidebar({ userId }: Props) {
 
             try {
                 const queryParams = new URLSearchParams({
-                    userId,
                     limit: INITIAL_LOAD_COUNT.toString(),
                     ...(beforeTimestamp && { before: beforeTimestamp })
                 });
@@ -90,7 +85,7 @@ export const Sidebar = memo(function Sidebar({ userId }: Props) {
                 throw error;
             }
         },
-        [userId]
+        []
     );
 
     // Initial load

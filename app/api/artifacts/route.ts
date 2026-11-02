@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Artifact from "@/models/artifact";
+import { getUserId } from "@/lib/user";
 
 export async function POST(req: NextRequest) {
     try {
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
         const artifactData = await req.json();
         const artifact = new Artifact({
             ...artifactData,
-            userId: "1"
+            userId: (await getUserId()) ?? "anonymous"
         });
         const shareableURL = `${process.env.NEXT_PUBLIC_URL}/artifacts/${artifact._id}`;
         artifact.shareableURL = shareableURL;

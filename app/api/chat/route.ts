@@ -42,6 +42,7 @@ import { findRelevantMemories, extractMemory } from "@/lib/memory";
 import { describeRepo, getRepoSnapshot } from "@/lib/github/repo";
 import { createRepoTools } from "@/lib/github/tools";
 import { routeRequest } from "@/lib/routing/auto-router";
+import { getUserId } from "@/lib/user";
 
 export const maxDuration = 100; // Timeout in seconds
 
@@ -76,16 +77,20 @@ const getToolsToUse = (
 
 export async function POST(req: Request) {
     const {
-        userId,
         messages,
         settings,
         repo
     }: {
-        userId: string;
         messages: ChatUIMessage[];
         settings: Settings;
         repo?: RepoConnection | null;
     } = await req.json();
+
+    // Memories belong to the browser's user (set by proxy.ts)
+    const userId = await getUserId();
+    if (!userId) {
+        return Response.json({ error: "Missing user cookie" }, { status: 401 });
+    }
 
     const {
         model,

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "docs:auto-routing": "node --no-warnings scripts/auto-routing-table.mjs"
+    "docs:auto-routing": "node --no-warnings scripts/auto-routing-table.mjs",
+    "claim-legacy-chats": "node scripts/claim-legacy-chats.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.94",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Chat from "@/models/chat";
+import { getUserId } from "@/lib/user";
 
 // Mark the route as dynamic
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
         await dbConnect();
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId');
+        const userId = await getUserId();
         const before = searchParams.get('before'); // timestamp for cursor-based pagination
         const limit = Math.min(
             parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT)),
@@ -22,11 +23,8 @@ export async function GET(request: Request) {
 
         if (!userId) {
             return NextResponse.json(
-                { 
-                    success: false, 
-                    error: "User ID is required" 
-                }, 
-                { status: 400 }
+                { success: false, error: "Missing user cookie" },
+                { status: 401 }
             );
         }
 

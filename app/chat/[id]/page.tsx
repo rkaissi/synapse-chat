@@ -1,6 +1,7 @@
 import { Chat } from "@/components/chat";
 import dbConnect from "@/lib/db";
 import ChatModel from "@/models/chat";
+import { getUserId } from "@/lib/user";
 import { Metadata, ResolvingMetadata } from "next";
 
 type Props = {
@@ -13,7 +14,12 @@ export async function generateMetadata(props: Props, parent: ResolvingMetadata):
 
     try {
         await dbConnect();
-        const chat = await ChatModel.findById(chatId).select("name");
+        // Only the owner (or anyone, for public chats) sees the chat's name
+        const userId = await getUserId();
+        const chat = await ChatModel.findOne({
+            _id: chatId,
+            $or: [{ userId }, { public: true }]
+        }).select("name");
         return { title: chat ? chat.name : "Chat" };
     } catch (error) {
         console.error("Failed to load chat metadata:", error);
@@ -23,7 +29,6 @@ export async function generateMetadata(props: Props, parent: ResolvingMetadata):
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
-    const userId = "1";
     // Keyed so switching chats never reuses the previous chat's state
-    return <Chat key={params.id} userId={userId} chatId={params.id} />;
+    return <Chat key={params.id} chatId={params.id} />;
 }

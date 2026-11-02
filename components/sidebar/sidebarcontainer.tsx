@@ -5,12 +5,11 @@ import { cn } from "@/lib/utils";
 import { Sidebar } from "./sidebar";
 
 interface Props {
-    userId: string;
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
-export const SidebarContainer = ({ userId, isOpen, onOpenChange }: Props) => {
+export const SidebarContainer = ({ isOpen, onOpenChange }: Props) => {
     const isDesktop = useMediaQuery("(min-width: 1024px)");
 
     if (isDesktop) {
@@ -22,7 +21,7 @@ export const SidebarContainer = ({ userId, isOpen, onOpenChange }: Props) => {
                     isOpen ? "w-80" : "w-0"
                 )}
             >
-                {isOpen && <Sidebar userId={userId} />}
+                {isOpen && <Sidebar />}
             </div>
         );
     }
@@ -30,7 +29,7 @@ export const SidebarContainer = ({ userId, isOpen, onOpenChange }: Props) => {
     return (
         <Sheet open={isOpen} onOpenChange={onOpenChange}>
             <SheetContent side="left" className="w-80 p-0">
-                <Sidebar userId={userId} />
+                <Sidebar />
             </SheetContent>
         </Sheet>
     );

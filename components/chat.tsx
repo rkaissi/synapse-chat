@@ -93,11 +93,9 @@ const reducer = (state: Settings, action: Action): Settings => {
 };
 
 export function Chat({
-    userId,
     chatId,
     isNewChat = false
 }: {
-    userId: string;
     chatId: string;
     // Set by the home page. Existing chats (/chat/[id]) are loaded from the
     // database; new ones aren't saved yet, so there is nothing to load. (The
@@ -191,7 +189,8 @@ export function Chat({
 
     const isLoading = status === "submitted" || status === "streaming";
 
-    const requestOptions = { body: { userId, settings: state, repo } };
+    // The user is identified by a cookie (proxy.ts), not sent in the body
+    const requestOptions = { body: { settings: state, repo } };
 
     const addMessage = (message: NewMessage) => {
         shouldSaveRef.current = true;
@@ -215,8 +214,8 @@ export function Chat({
 
     const reload = useCallback(() => {
         shouldSaveRef.current = true;
-        regenerate({ body: { userId, settings: state, repo } });
-    }, [regenerate, userId, state, repo]);
+        regenerate({ body: { settings: state, repo } });
+    }, [regenerate, state, repo]);
 
     // A new chat gets its own URL once it has a message (without navigating,
     // so this component stays mounted)
@@ -284,7 +283,6 @@ export function Chat({
         shouldSaveRef.current = false;
         console.log("Saving...");
         await saveChat(
-            userId,
             chatId,
             combinedMessagesRef.current[0].originalContent.slice(0, 50),
             combinedMessagesRef.current,
@@ -292,7 +290,7 @@ export function Chat({
             repoRef.current
         );
         console.log("Save completed");
-    }, [state, userId, chatId]);
+    }, [state, chatId]);
 
     const processMessage = useCallback(
         (content: string, model?: ModelKey) => {
@@ -609,7 +607,6 @@ export function Chat({
     return (
         <div className="flex h-full w-full">
             <SidebarContainer
-                userId={userId}
                 isOpen={isSidebarOpen}
                 onOpenChange={setIsSidebarOpen}
             />

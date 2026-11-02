@@ -58,7 +58,8 @@ A full pass over the interface. Known issues and ideas collected so far:
 - [ ] Add version of Custom GPTs / Claude Projects / Perplexity Pages
 - [ ] Update logic mode / add [chain of thought mode or model](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/chain-of-thought)
 - [ ] Temporary/Private chats (+ clear chat)
-- [ ] Real user accounts (every request currently uses `userId = "1"`)
+- [x] Separate users without sign-in: an anonymous per-browser ID cookie (`proxy.ts`)
+- [ ] Real user accounts (sign-in, chats across devices); migrate each browser ID's chats to its account
 - [ ] Restore per-chat settings (model, artifacts toggle, …) when a saved chat is opened
 
 ## CoT Resources
